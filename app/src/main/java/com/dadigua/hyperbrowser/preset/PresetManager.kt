@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.dadigua.hyperbrowser.browser.BrowserProfileStore
 import com.dadigua.hyperbrowser.extensions.ExtensionRepository
-import com.dadigua.hyperbrowser.extensions.INTERNAL_EXTENSION_ID
 import com.dadigua.hyperbrowser.webapp.WebAppRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -208,6 +207,10 @@ class PresetManager(private val context: Context) {
         private const val LAUNCHER_FILE = "launcher.json"
         private const val SETTINGS_FILE = "browser_settings.json"
         private const val TABS_FILE = "browser_tabs.json"
+        // Mirrors ExtensionRepository.INTERNAL_EXTENSION_ID (private companion val).
+        // Duplicated here so PresetManager keeps compiling when ExtensionRepository
+        // is at baseline (no top-level const).
+        private const val INTERNAL_EXTENSION_ID = "hyper-browser-internal@dadigua.com"
     }
 }
 

@@ -44,9 +44,6 @@ data class ExtensionNewTabRequest(
     val session: GeckoSession
 )
 
-/** GUID of the built-in internal WebExtension that must be excluded from presets. */
-const val INTERNAL_EXTENSION_ID = "hyper-browser-internal@dadigua.com"
-
 class ExtensionRepository(
     private val context: Context
 ) {
@@ -226,21 +223,6 @@ class ExtensionRepository(
             response.body?.string() ?: error("AMO returned an empty response.")
         }
         parseSearch(JSONObject(body).getJSONArray("results"))
-    }
-
-    /**
-     * Fetch a single addon listing from AMO by its guid. Used by the preset
-     * importer to re-resolve the current XPI URL at install time on a fresh
-     * device, since preset files only store the guid (XPI URLs change with
-     * each version). AMO's addon-detail endpoint accepts guid in the path.
-     */
-    suspend fun fetchAddonByGuid(guid: String): AmoAddonListing = withContext(Dispatchers.IO) {
-        val url = "https://addons.mozilla.org/api/v5/addons/addon/${java.net.URLEncoder.encode(guid, "UTF-8")}/?lang=zh-CN"
-        val body = http.newCall(Request.Builder().url(url).build()).execute().use { response ->
-            if (!response.isSuccessful) error("AMO addon lookup failed: HTTP ${response.code}")
-            response.body?.string() ?: error("AMO returned an empty response.")
-        }
-        parseAddon(JSONObject(body))
     }
 
     suspend fun downloadAndInstall(addon: AmoAddonListing, onStage: (String) -> Unit = {}) {
@@ -424,26 +406,25 @@ class ExtensionRepository(
     private fun parseSearch(results: JSONArray): List<AmoAddonListing> =
         buildList {
             for (index in 0 until results.length()) {
-                add(parseAddon(results.getJSONObject(index)))
+                val item = results.getJSONObject(index)
+                val version = item.getJSONObject("current_version")
+                val file = version.getJSONObject("file")
+                val compatibility = version.optJSONObject("compatibility")?.optJSONObject("android")
+                add(
+                    AmoAddonListing(
+                        name = localized(item.getJSONObject("name")),
+                        slug = item.getString("slug"),
+                        guid = item.getString("guid"),
+                        version = version.getString("version"),
+                        userCount = item.optInt("average_daily_users", 0),
+                        xpiUrl = file.getString("url"),
+                        permissions = file.optJSONArray("permissions").toStringList(),
+                        minAndroidVersion = compatibility?.optString("min"),
+                        maxAndroidVersion = compatibility?.optString("max")
+                    )
+                )
             }
         }
-
-    private fun parseAddon(item: JSONObject): AmoAddonListing {
-        val version = item.getJSONObject("current_version")
-        val file = version.getJSONObject("file")
-        val compatibility = version.optJSONObject("compatibility")?.optJSONObject("android")
-        return AmoAddonListing(
-            name = localized(item.getJSONObject("name")),
-            slug = item.getString("slug"),
-            guid = item.getString("guid"),
-            version = version.getString("version"),
-            userCount = item.optInt("average_daily_users", 0),
-            xpiUrl = file.getString("url"),
-            permissions = file.optJSONArray("permissions").toStringList(),
-            minAndroidVersion = compatibility?.optString("min"),
-            maxAndroidVersion = compatibility?.optString("max")
-        )
-    }
 
     private fun localized(value: JSONObject): String =
         value.nonNullString("zh-CN")
@@ -507,6 +488,7 @@ class ExtensionRepository(
     }
 
     private companion object {
+        const val INTERNAL_EXTENSION_ID = "hyper-browser-internal@dadigua.com"
         const val ENABLE_SOURCE_USER = 1
         const val ENABLE_SOURCE_APP = 2
     }
