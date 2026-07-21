@@ -283,6 +283,17 @@
     <string name="settings_export_json">导出 JSON</string>
     <string name="settings_import_json">导入 JSON</string>
     <string name="settings_backup_help">将书签和 WebApp 备份到本地 JSON 文件。</string>
+    <string name="settings_export_preset">导出为 Preset</string>
+    <string name="settings_preset_help">把当前完整定制状态（书签、WebApp、启动器布局、设置、标签页、扩展）导出为 preset JSON。把文件放到 app/src/main/assets/preset/preset-backup.json 再重新构建 APK，新设备首次安装即可自动恢复该状态。WebDAV 密码会被剔除。</string>
+    <string name="preset_choose_save_location">请选择 preset JSON 保存位置。</string>
+    <string name="preset_exporting">正在导出 preset...</string>
+    <string name="preset_export_success">Preset 已导出。复制到 app/src/main/assets/preset/preset-backup.json 并重新构建即可分发。</string>
+    <string name="preset_export_failed">Preset 导出失败。</string>
+    <string name="preset_export_canceled">已取消 preset 导出。</string>
+    <string name="preset_write_failed">无法写入 preset 文件。</string>
+    <string name="preset_installing_extension">正在安装 preset 扩展 %1$s...</string>
+    <string name="preset_extension_installed">Preset 扩展 %1$s 已安装。</string>
+    <string name="preset_extension_install_failed">安装 preset 扩展 %1$s 失败：%2$s</string>
     <string name="settings_background_runtime">后台运行</string>
     <string name="settings_battery_allowed">已允许</string>
     <string name="settings_battery_restricted">受限制</string>
