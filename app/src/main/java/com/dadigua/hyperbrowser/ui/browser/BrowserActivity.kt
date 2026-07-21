@@ -1308,21 +1308,6 @@ private fun BrowserScreen(
         runCatching { app.extensions.refreshInstalledFromRuntime() }
     }
 
-    LaunchedEffect(Unit) {
-        val pending = presetManager.consumePendingExtensions()
-        if (pending.isEmpty()) return@LaunchedEffect
-        pending.forEach { ext ->
-            runCatching {
-                message = context.getString(R.string.preset_installing_extension, ext.name)
-                val listing = app.extensions.fetchAddonByGuid(ext.guid)
-                app.extensions.downloadAndInstall(listing)
-                message = context.getString(R.string.preset_extension_installed, ext.name)
-            }.onFailure {
-                message = context.getString(R.string.preset_extension_install_failed, ext.name, it.message ?: "")
-            }
-        }
-    }
-
     fun showPanel(panel: BrowserPanel) {
         if (findInPageVisible) closeFindInPage()
         activePanel = panel
