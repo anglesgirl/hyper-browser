@@ -1308,6 +1308,28 @@ private fun BrowserScreen(
         runCatching { app.extensions.refreshInstalledFromRuntime() }
     }
 
+    LaunchedEffect(Unit) {
+        val pending = presetManager.consumePendingExtensions()
+        if (pending.isEmpty()) return@LaunchedEffect
+        val alreadyInstalled = app.extensions.observeInstalled().value.map { it.guid }.toSet()
+        pending.forEach { ext ->
+            if (ext.guid in alreadyInstalled) return@forEach
+            runCatching {
+                message = context.getString(R.string.preset_installing_extension, ext.name)
+                // ExtensionRepository 保持 baseline（未新增 fetchAddonByGuid），
+                // 通过现有 searchAndroidAddons(name) 找到匹配 guid 的 listing，
+                // 再调用 downloadAndInstall。这样 ExtensionRepository 零改动。
+                val listing = app.extensions.searchAndroidAddons(ext.name)
+                    .firstOrNull { it.guid == ext.guid }
+                    ?: error("AMO search returned no match for ${ext.name}")
+                app.extensions.downloadAndInstall(listing)
+                message = context.getString(R.string.preset_extension_installed, ext.name)
+            }.onFailure {
+                message = context.getString(R.string.preset_extension_install_failed, ext.name, it.message ?: "")
+            }
+        }
+    }
+
     fun showPanel(panel: BrowserPanel) {
         if (findInPageVisible) closeFindInPage()
         activePanel = panel
