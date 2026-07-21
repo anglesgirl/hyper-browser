@@ -53,12 +53,14 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --console=plain
 
-      - name: Rename APK with short sha
+      - name: Locate and rename APK
         run: |
+          echo "--- APK output dir ---"
+          find app/build/outputs/apk -type f -name "*.apk" -exec ls -lh {} \;
           SHORT_SHA=$(git rev-parse --short HEAD)
-          mv app/build/outputs/apk/debug/app-debug.apk \
-             app/build/outputs/apk/debug/hyperbrowser-debug-${SHORT_SHA}.apk
-          ls -lh app/build/outputs/apk/debug/
+          mkdir -p release-assets
+          find app/build/outputs/apk -type f -name "*.apk" -exec cp {} release-assets/hyperbrowser-debug-${SHORT_SHA}.apk \;
+          ls -lh release-assets/
 
       - name: Create release and upload APK
         uses: softprops/action-gh-release@v2
@@ -71,12 +73,12 @@ jobs:
             - Built from commit: ${{ github.event.head_commit.message }}
             - Build run: ${{ github.run_number }}
           prerelease: true
-          files: app/build/outputs/apk/debug/*.apk
+          files: release-assets/*.apk
 
       - name: Upload debug APK as artifact (backup)
         uses: actions/upload-artifact@v4
         with:
           name: hyperbrowser-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: release-assets/*.apk
           if-no-files-found: error
           retention-days: 30
