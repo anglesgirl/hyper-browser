@@ -35,7 +35,6 @@ object HyperBridge {
         "sync.localFile.save",
         "backup.export",
         "backup.import",
-        "preset.export",
         "update.check",
         "update.skip",
         "update.clearSkip",

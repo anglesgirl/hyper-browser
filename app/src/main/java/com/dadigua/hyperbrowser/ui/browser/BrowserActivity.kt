@@ -59,7 +59,6 @@ import com.dadigua.hyperbrowser.browser.DownloadStatus
 import com.dadigua.hyperbrowser.browser.DownloadStore
 import com.dadigua.hyperbrowser.browser.FaviconRepository
 import com.dadigua.hyperbrowser.backup.BrowserBackupManager
-import com.dadigua.hyperbrowser.preset.PresetManager
 import com.dadigua.hyperbrowser.backup.BrowserBackupImportPreview
 import com.dadigua.hyperbrowser.backup.previewBrowserBackupImport
 import com.dadigua.hyperbrowser.browser.BrowserProfileStore
@@ -231,7 +230,6 @@ private fun BrowserScreen(
     val linkCopiedText = stringResource(R.string.browser_toast_link_copied)
     val faviconStore = remember { FaviconRepository(app) }
     val backupManager = remember { BrowserBackupManager(profileStore, app.webApps) }
-    val presetManager = remember { PresetManager(app) }
     val webDavLocalSyncAdapter = remember { WebDavLocalSyncAdapter(profileStore, app.webApps) }
     val downloadStore = remember { DownloadStore(app) }
     val downloadHandler = remember { DownloadHandler(app, downloadStore) }
@@ -580,34 +578,6 @@ private fun BrowserScreen(
         }
     }
 
-    fun defaultPresetFileName(): String =
-        "hyper-browser-preset.json"
-
-    val exportPresetLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri == null) {
-            message = context.getString(R.string.preset_export_canceled)
-            return@rememberLauncherForActivityResult
-        }
-        scope.launch {
-            message = context.getString(R.string.preset_exporting)
-            runCatching {
-                val presetJson = withContext(Dispatchers.IO) {
-                    presetManager.exportPresetJson(profileStore, app.webApps, app.extensions)
-                }
-                withContext(Dispatchers.IO) {
-                    context.contentResolver.openOutputStream(uri)
-                        ?.bufferedWriter(Charsets.UTF_8)
-                        ?.use { writer -> writer.write(presetJson) }
-                        ?: error(context.getString(R.string.preset_write_failed))
-                }
-            }
-                .onSuccess { message = context.getString(R.string.preset_export_success) }
-                .onFailure { message = it.message ?: context.getString(R.string.preset_export_failed) }
-        }
-    }
-
     val importBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -826,10 +796,6 @@ private fun BrowserScreen(
                     importBackupLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream", "*/*"))
                 }
                 okData(JSONObject().put("message", context.getString(R.string.backup_choose_file)))
-            }
-            "preset.export" -> {
-                scope.launch { exportPresetLauncher.launch(defaultPresetFileName()) }
-                okData(JSONObject().put("message", context.getString(R.string.preset_choose_save_location)))
             }
             "update.check" -> {
                 val result = runBlocking {
@@ -1306,21 +1272,6 @@ private fun BrowserScreen(
 
     LaunchedEffect(Unit) {
         runCatching { app.extensions.refreshInstalledFromRuntime() }
-    }
-
-    LaunchedEffect(Unit) {
-        val pending = presetManager.consumePendingExtensions()
-        if (pending.isEmpty()) return@LaunchedEffect
-        pending.forEach { ext ->
-            runCatching {
-                message = context.getString(R.string.preset_installing_extension, ext.name)
-                val listing = app.extensions.fetchAddonByGuid(ext.guid)
-                app.extensions.downloadAndInstall(listing)
-                message = context.getString(R.string.preset_extension_installed, ext.name)
-            }.onFailure {
-                message = context.getString(R.string.preset_extension_install_failed, ext.name, it.message ?: "")
-            }
-        }
     }
 
     fun showPanel(panel: BrowserPanel) {
@@ -1811,7 +1762,6 @@ private fun BrowserScreen(
                     onImportBackup = {
                         importBackupLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream", "*/*"))
                     },
-                    onExportPreset = { exportPresetLauncher.launch(defaultPresetFileName()) },
                     onCheckUpdate = {
                         scope.launch {
                             settingsUpdateMessage = context.getString(R.string.settings_update_checking)
