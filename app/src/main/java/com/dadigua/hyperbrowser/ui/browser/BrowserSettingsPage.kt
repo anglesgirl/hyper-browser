@@ -69,6 +69,7 @@ internal fun SettingsPage(
     onOpenBatteryOptimizationSettings: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
+    onExportPreset: () -> Unit,
     onCheckUpdate: () -> Unit,
     onInstallUpdate: (AvailableUpdate) -> Unit,
     onSkipUpdate: (AvailableUpdate) -> Unit,
@@ -347,8 +348,10 @@ internal fun SettingsPage(
                             SettingsActions {
                                 TextButton(onClick = onExportBackup) { Text(stringResource(R.string.settings_export_json)) }
                                 TextButton(onClick = onImportBackup) { Text(stringResource(R.string.settings_import_json)) }
+                                TextButton(onClick = onExportPreset) { Text(stringResource(R.string.settings_export_preset)) }
                             }
                             SettingsInlineMessage(stringResource(R.string.settings_backup_help))
+                            SettingsInlineMessage(stringResource(R.string.settings_preset_help))
                         }
                     }
                 }
@@ -564,10 +567,13 @@ private fun settingsSections(
                 stringResource(R.string.settings_backup_value),
                 stringResource(R.string.settings_export_json),
                 stringResource(R.string.settings_import_json),
+                stringResource(R.string.settings_export_preset),
+                stringResource(R.string.settings_preset_help),
                 stringResource(R.string.settings_backup_help),
                 "json",
                 "restore",
-                "webapp"
+                "webapp",
+                "preset"
             )
         ),
         SettingsSectionInfo(
