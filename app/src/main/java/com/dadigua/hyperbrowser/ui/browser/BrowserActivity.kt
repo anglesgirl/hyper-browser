@@ -59,7 +59,6 @@ import com.dadigua.hyperbrowser.browser.DownloadStatus
 import com.dadigua.hyperbrowser.browser.DownloadStore
 import com.dadigua.hyperbrowser.browser.FaviconRepository
 import com.dadigua.hyperbrowser.backup.BrowserBackupManager
-import com.dadigua.hyperbrowser.preset.PresetManager
 import com.dadigua.hyperbrowser.backup.BrowserBackupImportPreview
 import com.dadigua.hyperbrowser.backup.previewBrowserBackupImport
 import com.dadigua.hyperbrowser.browser.BrowserProfileStore
@@ -199,6 +198,7 @@ private enum class BrowserPanel {
     None,
     Search,
     Settings,
+    QuickSettings,
     Bookmarks,
     History,
     Downloads,
@@ -207,6 +207,7 @@ private enum class BrowserPanel {
 }
 
 private const val TAB_THUMBNAIL_PAGE_STOP_REFRESH_DELAY_MS = 700L
+private const val KEY_QUICK_SETUP_DONE = "quickSetupDone"
 private val ToolbarAutoHideDragRange = 72.dp
 
 @Composable
@@ -231,7 +232,6 @@ private fun BrowserScreen(
     val linkCopiedText = stringResource(R.string.browser_toast_link_copied)
     val faviconStore = remember { FaviconRepository(app) }
     val backupManager = remember { BrowserBackupManager(profileStore, app.webApps) }
-    val presetManager = remember { PresetManager(app) }
     val webDavLocalSyncAdapter = remember { WebDavLocalSyncAdapter(profileStore, app.webApps) }
     val downloadStore = remember { DownloadStore(app) }
     val downloadHandler = remember { DownloadHandler(app, downloadStore) }
@@ -580,34 +580,6 @@ private fun BrowserScreen(
         }
     }
 
-    fun defaultPresetFileName(): String =
-        "hyper-browser-preset.json"
-
-    val exportPresetLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri == null) {
-            message = context.getString(R.string.preset_export_canceled)
-            return@rememberLauncherForActivityResult
-        }
-        scope.launch {
-            message = context.getString(R.string.preset_exporting)
-            runCatching {
-                val presetJson = withContext(Dispatchers.IO) {
-                    presetManager.exportPresetJson(profileStore, app.webApps, app.extensions)
-                }
-                withContext(Dispatchers.IO) {
-                    context.contentResolver.openOutputStream(uri)
-                        ?.bufferedWriter(Charsets.UTF_8)
-                        ?.use { writer -> writer.write(presetJson) }
-                        ?: error(context.getString(R.string.preset_write_failed))
-                }
-            }
-                .onSuccess { message = context.getString(R.string.preset_export_success) }
-                .onFailure { message = it.message ?: context.getString(R.string.preset_export_failed) }
-        }
-    }
-
     val importBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -826,10 +798,6 @@ private fun BrowserScreen(
                     importBackupLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream", "*/*"))
                 }
                 okData(JSONObject().put("message", context.getString(R.string.backup_choose_file)))
-            }
-            "preset.export" -> {
-                scope.launch { exportPresetLauncher.launch(defaultPresetFileName()) }
-                okData(JSONObject().put("message", context.getString(R.string.preset_choose_save_location)))
             }
             "update.check" -> {
                 val result = runBlocking {
@@ -1115,9 +1083,21 @@ private fun BrowserScreen(
     var activePanel by remember {
         mutableStateOf(if (initialShowDownloads) BrowserPanel.Downloads else BrowserPanel.None)
     }
+    // 首次启动自动弹出快速设置面板（SharedPreferences 标志，仅触发一次）
+    val quickSetupPrefs = remember {
+        context.getSharedPreferences("hyper-browser-quick-setup", Context.MODE_PRIVATE)
+    }
+    LaunchedEffect(Unit) {
+        if (!quickSetupPrefs.getBoolean(KEY_QUICK_SETUP_DONE, false)) {
+            if (activePanel == BrowserPanel.None) {
+                activePanel = BrowserPanel.QuickSettings
+            }
+        }
+    }
     var tabTrayMode by remember { mutableStateOf(TabTrayMode.Card) }
     val showSearch = activePanel == BrowserPanel.Search
     val showSettings = activePanel == BrowserPanel.Settings
+    val showQuickSettings = activePanel == BrowserPanel.QuickSettings
     val showBookmarks = activePanel == BrowserPanel.Bookmarks
     val showHistory = activePanel == BrowserPanel.History
     val showDownloads = activePanel == BrowserPanel.Downloads
@@ -1306,28 +1286,6 @@ private fun BrowserScreen(
 
     LaunchedEffect(Unit) {
         runCatching { app.extensions.refreshInstalledFromRuntime() }
-    }
-
-    LaunchedEffect(Unit) {
-        val pending = presetManager.consumePendingExtensions()
-        if (pending.isEmpty()) return@LaunchedEffect
-        val alreadyInstalled = app.extensions.observeInstalled().value.map { it.guid }.toSet()
-        pending.forEach { ext ->
-            if (ext.guid in alreadyInstalled) return@forEach
-            runCatching {
-                message = context.getString(R.string.preset_installing_extension, ext.name)
-                // ExtensionRepository 保持 baseline（未新增 fetchAddonByGuid），
-                // 通过现有 searchAndroidAddons(name) 找到匹配 guid 的 listing，
-                // 再调用 downloadAndInstall。这样 ExtensionRepository 零改动。
-                val listing = app.extensions.searchAndroidAddons(ext.name)
-                    .firstOrNull { it.guid == ext.guid }
-                    ?: error("AMO search returned no match for ${ext.name}")
-                app.extensions.downloadAndInstall(listing)
-                message = context.getString(R.string.preset_extension_installed, ext.name)
-            }.onFailure {
-                message = context.getString(R.string.preset_extension_install_failed, ext.name, it.message ?: "")
-            }
-        }
     }
 
     fun showPanel(panel: BrowserPanel) {
@@ -1818,7 +1776,6 @@ private fun BrowserScreen(
                     onImportBackup = {
                         importBackupLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream", "*/*"))
                     },
-                    onExportPreset = { exportPresetLauncher.launch(defaultPresetFileName()) },
                     onCheckUpdate = {
                         scope.launch {
                             settingsUpdateMessage = context.getString(R.string.settings_update_checking)
@@ -1852,6 +1809,34 @@ private fun BrowserScreen(
                     onClearSkippedUpdate = {
                         updateManager.clearSkip()
                         settingsUpdateMessage = context.getString(R.string.settings_update_skip_cleared)
+                    }
+                )
+            } else if (showQuickSettings) {
+                QuickSettingsPage(
+                    settings = settings,
+                    message = message,
+                    onBack = {
+                        // 首次启动时点返回视为完成快速设置，标记后不再自动弹出
+                        quickSetupPrefs.edit().putBoolean(KEY_QUICK_SETUP_DONE, true).apply()
+                        closePanel()
+                    },
+                    onUpdateDoh = { dohEnabled, dohProviderUrl ->
+                        val current = profileStore.observeSettings().value
+                        profileStore.updatePrivacySettings(
+                            dohEnabled = dohEnabled,
+                            dohProviderUrl = dohProviderUrl,
+                            httpsOnlyEnabled = current.httpsOnlyEnabled,
+                            privacyProtectionLevel = current.privacyProtectionLevel
+                        )
+                        GeckoRuntimeProvider.applyBrowserSettings(app, profileStore.observeSettings().value)
+                        message = context.getString(R.string.quick_settings_doh_title) + " ✓"
+                    },
+                    onShowExtensions = {
+                        quickSetupPrefs.edit().putBoolean(KEY_QUICK_SETUP_DONE, true).apply()
+                        showPanel(BrowserPanel.Extensions)
+                    },
+                    onImportBackup = {
+                        importBackupLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream", "*/*"))
                     }
                 )
             } else if (showBookmarks) {
@@ -2135,6 +2120,10 @@ private fun BrowserScreen(
                         },
                         onShowSettings = {
                             showPanel(BrowserPanel.Settings)
+                            message = null
+                        },
+                        onShowQuickSettings = {
+                            showPanel(BrowserPanel.QuickSettings)
                             message = null
                         },
                         onShowDownloads = { showPanel(BrowserPanel.Downloads) },

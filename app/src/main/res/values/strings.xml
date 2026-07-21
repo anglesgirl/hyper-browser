@@ -3,6 +3,18 @@
     <string name="prompt_title_message">Message</string>
     <string name="prompt_title_confirm">Confirm</string>
     <string name="prompt_title_input">Input</string>
+    <!-- Quick settings panel -->
+    <string name="quick_settings_title">Quick setup</string>
+    <string name="quick_settings_intro">Get the most important settings done in one place. You can also change all of these later in Settings.</string>
+    <string name="quick_settings_doh_title">DNS over HTTPS</string>
+    <string name="quick_settings_doh_subtitle">Enable DoH to resolve DNS via HTTPS. ECH (Encrypted Client Hello) follows DoH automatically — needed to reach some sites.</string>
+    <string name="quick_settings_extensions_title">Extensions</string>
+    <string name="quick_settings_extensions_subtitle">Install uBlock Origin and other AMO Android addons to block ads and customize browsing.</string>
+    <string name="quick_settings_open_extensions">Open extensions</string>
+    <string name="quick_settings_backup_title">Restore from backup</string>
+    <string name="quick_settings_backup_subtitle">Import a previously exported backup JSON to restore bookmarks, WebApps and launcher layout.</string>
+    <string name="quick_settings_import_backup">Import backup</string>
+    <string name="quick_settings_open_from_settings">Quick setup</string>
     <string name="prompt_title_choose">Choose</string>
     <string name="prompt_title_login_required">Login required</string>
     <string name="prompt_title_leave_site">Leave site?</string>
@@ -286,17 +298,6 @@
     <string name="settings_export_json">Export JSON</string>
     <string name="settings_import_json">Import JSON</string>
     <string name="settings_backup_help">Back up bookmarks and WebApps to a local JSON file.</string>
-    <string name="settings_export_preset">Export as Preset</string>
-    <string name="settings_preset_help">Export the full customized state (bookmarks, WebApps, launcher, settings, tabs, extensions) as a preset JSON. Drop the file into app/src/main/assets/preset/preset-backup.json and rebuild the APK to deploy this state to fresh installs. WebDAV password is stripped.</string>
-    <string name="preset_choose_save_location">Choose where to save the preset JSON.</string>
-    <string name="preset_exporting">Exporting preset...</string>
-    <string name="preset_export_success">Preset exported. Copy it to app/src/main/assets/preset/preset-backup.json and rebuild to deploy.</string>
-    <string name="preset_export_failed">Preset export failed.</string>
-    <string name="preset_export_canceled">Preset export canceled.</string>
-    <string name="preset_write_failed">Unable to write preset file.</string>
-    <string name="preset_installing_extension">Installing preset extension %1$s...</string>
-    <string name="preset_extension_installed">Preset extension %1$s installed.</string>
-    <string name="preset_extension_install_failed">Failed to install preset extension %1$s: %2$s</string>
     <string name="settings_background_runtime">Background runtime</string>
     <string name="settings_battery_allowed">Allowed</string>
     <string name="settings_battery_restricted">Restricted</string>

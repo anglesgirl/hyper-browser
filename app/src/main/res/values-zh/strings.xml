@@ -3,6 +3,18 @@
     <string name="prompt_title_message">消息</string>
     <string name="prompt_title_confirm">确认</string>
     <string name="prompt_title_input">输入</string>
+    <!-- Quick settings panel -->
+    <string name="quick_settings_title">快速设置</string>
+    <string name="quick_settings_intro">在这里一次性完成最重要的几项设置。之后也可以随时在「设置」里修改。</string>
+    <string name="quick_settings_doh_title">DNS over HTTPS</string>
+    <string name="quick_settings_doh_subtitle">启用 DoH 通过 HTTPS 解析 DNS。ECH（加密客户端问候）会自动跟随 DoH 生效，访问部分网站需要开启。</string>
+    <string name="quick_settings_extensions_title">扩展</string>
+    <string name="quick_settings_extensions_subtitle">安装 uBlock Origin 等 AMO 安卓扩展，屏蔽广告、定制浏览体验。</string>
+    <string name="quick_settings_open_extensions">打开扩展管理</string>
+    <string name="quick_settings_backup_title">从备份恢复</string>
+    <string name="quick_settings_backup_subtitle">导入之前导出的备份 JSON，恢复书签、WebApp 和启动器布局。</string>
+    <string name="quick_settings_import_backup">导入备份</string>
+    <string name="quick_settings_open_from_settings">快速设置</string>
     <string name="prompt_title_choose">选择</string>
     <string name="prompt_title_login_required">需要登录</string>
     <string name="prompt_title_leave_site">要离开网站吗？</string>
@@ -283,17 +295,6 @@
     <string name="settings_export_json">导出 JSON</string>
     <string name="settings_import_json">导入 JSON</string>
     <string name="settings_backup_help">将书签和 WebApp 备份到本地 JSON 文件。</string>
-    <string name="settings_export_preset">导出为 Preset</string>
-    <string name="settings_preset_help">把当前完整定制状态（书签、WebApp、启动器布局、设置、标签页、扩展）导出为 preset JSON。把文件放到 app/src/main/assets/preset/preset-backup.json 再重新构建 APK，新设备首次安装即可自动恢复该状态。WebDAV 密码会被剔除。</string>
-    <string name="preset_choose_save_location">请选择 preset JSON 保存位置。</string>
-    <string name="preset_exporting">正在导出 preset...</string>
-    <string name="preset_export_success">Preset 已导出。复制到 app/src/main/assets/preset/preset-backup.json 并重新构建即可分发。</string>
-    <string name="preset_export_failed">Preset 导出失败。</string>
-    <string name="preset_export_canceled">已取消 preset 导出。</string>
-    <string name="preset_write_failed">无法写入 preset 文件。</string>
-    <string name="preset_installing_extension">正在安装 preset 扩展 %1$s...</string>
-    <string name="preset_extension_installed">Preset 扩展 %1$s 已安装。</string>
-    <string name="preset_extension_install_failed">安装 preset 扩展 %1$s 失败：%2$s</string>
     <string name="settings_background_runtime">后台运行</string>
     <string name="settings_battery_allowed">已允许</string>
     <string name="settings_battery_restricted">受限制</string>

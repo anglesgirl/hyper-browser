@@ -82,6 +82,7 @@ internal fun BrowserMenuPanel(
     onShowBookmarks: () -> Unit,
     onShowHistory: () -> Unit,
     onShowSettings: () -> Unit,
+    onShowQuickSettings: () -> Unit,
     onShowDownloads: () -> Unit,
     onShowExtensions: () -> Unit,
     onExtensionClick: (InstalledExtensionState) -> Unit,
@@ -210,6 +211,7 @@ internal fun BrowserMenuPanel(
                 onClick = onShowDownloads
             )
             BrowserMenuRow(label = stringResource(R.string.menu_settings), leadingIconVector = Icons.Outlined.Settings, onClick = onShowSettings)
+            BrowserMenuRow(label = stringResource(R.string.quick_settings_open_from_settings), leadingIconVector = Icons.Outlined.Tune, onClick = onShowQuickSettings)
         }
     }
 }

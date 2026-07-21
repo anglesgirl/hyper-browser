@@ -1,4 +1,0 @@
-# Drop a preset JSON exported from Settings → Backup → "Export as Preset" here,
-# renamed to preset-backup.json. On a fresh install (no bookmarks.json in filesDir),
-# HyperBrowserApp.onCreate will auto-import it via PresetManager.
-# WebDAV password is stripped on export; re-enter it on each device.
