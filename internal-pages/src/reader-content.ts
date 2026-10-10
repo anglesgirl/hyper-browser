@@ -133,7 +133,84 @@ function sanitizeArticle(content: string): DocumentFragment {
   return template.content;
 }
 
+/**
+ * AO3-specific article extraction.
+ * AO3 chapter pages have a well-defined structure that generic Readability
+ * doesn't always handle optimally:
+ *   - URL: archiveofourown.org/works/{id}/chapters/{chapterId}
+ *   - Content: #chapters .userstuff (the actual story text)
+ *   - Title: .chapter .heading (chapter title) + work title
+ *   - Navigation: .chapter .navigation / prev/next chapter links
+ */
+function isAo3ChapterPage(): boolean {
+  const host = window.location.hostname.toLowerCase();
+  if (host !== "archiveofourown.org" && !host.endsWith(".archiveofourown.org")) {
+    return false;
+  }
+  return /\/works\/\d+(\/chapters\/\d+)?/.test(window.location.pathname);
+}
+
+function extractAo3Article(): ReaderArticle | null {
+  if (!isAo3ChapterPage()) return null;
+
+  // AO3 wraps chapter content in #chapters > .chapter > .userstuff
+  const chaptersEl = document.querySelector("#chapters");
+  if (!chaptersEl) return null;
+
+  const userstuffEls = chaptersEl.querySelectorAll(".userstuff");
+  if (userstuffEls.length === 0) return null;
+
+  // Clone and sanitize each chapter block, preserving order
+  const container = document.createElement("div");
+  userstuffEls.forEach((el) => {
+    const clone = el.cloneNode(true) as HTMLElement;
+    // Remove AO3-specific non-content elements inside userstuff
+    clone.querySelectorAll(".kudos, .comments, .navigation, .actions").forEach((n) => n.remove());
+    container.appendChild(clone);
+  });
+
+  const textContent = (container.textContent || "").trim();
+  if (textContent.length < MIN_ARTICLE_CHARACTERS) return null;
+
+  // Title: prefer chapter heading, fall back to work title
+  let title = document.title;
+  const chapterHeading = document.querySelector(".chapter .heading, #chapters .heading");
+  if (chapterHeading?.textContent?.trim()) {
+    title = chapterHeading.textContent.trim();
+  } else {
+    const workTitle = document.querySelector(".work .heading, h2.title");
+    if (workTitle?.textContent?.trim()) {
+      title = workTitle.textContent.trim();
+    }
+  }
+
+  // Byline: AO3 author link
+  let byline: string | null = null;
+  const authorEl = document.querySelector('a[rel="author"], .byline a');
+  if (authorEl?.textContent?.trim()) {
+    byline = authorEl.textContent.trim();
+  }
+
+  // Sanitize through the shared sanitizer (pass as HTML string)
+  const fragment = sanitizeArticle(container.innerHTML);
+  const wrapper = document.createElement("div");
+  wrapper.appendChild(fragment);
+
+  return {
+    title,
+    byline,
+    siteName: "Archive of Our Own",
+    publishedTime: null,
+    content: wrapper.innerHTML,
+    textContent,
+  };
+}
+
 function extractArticle(): ReaderArticle | null {
+  // Prefer AO3-specific extraction on AO3 chapter pages
+  const ao3Article = extractAo3Article();
+  if (ao3Article) return ao3Article;
+
   const documentClone = document.cloneNode(true) as Document;
   const parsed = new Readability(documentClone, {
     keepClasses: false,

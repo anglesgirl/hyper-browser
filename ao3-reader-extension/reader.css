@@ -1,0 +1,92 @@
+/* AO3 Reader - floating button */
+#ao3-reader-btn {
+  position: fixed;
+  right: 16px;
+  bottom: 88px;
+  z-index: 2147483646;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 24px;
+  background: #970000;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+#ao3-reader-btn:hover { background: #b30000; }
+
+/* AO3 Reader - overlay */
+#ao3-reader-overlay {
+  --ao3r-font-size: 19px;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  background: #ffffff;
+  color: #1a1a1a;
+}
+#ao3-reader-overlay[data-theme="sepia"] {
+  background: #f4ecd8;
+  color: #433422;
+}
+#ao3-reader-overlay[data-theme="dark"] {
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+#ao3-reader-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+  flex-shrink: 0;
+}
+#ao3-reader-title {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+#ao3-reader-controls { display: flex; gap: 8px; flex-shrink: 0; }
+#ao3-reader-controls button {
+  padding: 6px 12px;
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+#ao3-reader-controls button:hover {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+#ao3-reader-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px 80px;
+  font-size: var(--ao3r-font-size);
+  line-height: 1.9;
+  max-width: 42em;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+#ao3-reader-body p { margin: 0 0 1.2em; }
+#ao3-reader-body img { max-width: 100%; height: auto; }
+#ao3-reader-body a { color: #970000; }
+#ao3-reader-overlay[data-theme="dark"] #ao3-reader-body a { color: #e08a8a; }
+#ao3-reader-body blockquote {
+  margin: 1em 0;
+  padding-left: 1em;
+  border-left: 3px solid rgba(128, 128, 128, 0.5);
+}
