@@ -53,12 +53,17 @@ jobs:
             companion-extension/pnpm-lock.yaml
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          # 优先使用 runner 预装 SDK；缺 android-36 / build-tools 36 才用预装 sdkmanager 补装
+          if [ ! -d "$ANDROID_HOME/platforms/android-36" ] || [ ! -d "$ANDROID_HOME/build-tools/36.0.0" ]; then
+            SDKMANAGER="$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)"
+            [ -n "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
+            yes | "$SDKMANAGER" --licenses > /dev/null || true
+            "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+          fi
+          echo "SDK ready -> platforms: $(ls "$ANDROID_HOME/platforms" | tr '\n' ' ')"
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
