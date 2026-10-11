@@ -129,7 +129,6 @@ function HomePage() {
     <>
       <div className="ao3-home-top">
         <QuickLinks />
-        <RecentWorks />
       </div>
       <LauncherPage
         labels={launcherLabels}
@@ -182,99 +181,6 @@ function QuickLinks() {
         </button>
       ))}
     </div>
-  );
-}
-
-// ===== AO3 Reader 最近作品（经 ao3-zh 扩展后台拉取解析） =====
-type RecentWork = {
-  title: string;
-  url: string;
-  author: string;
-};
-
-function RecentWorks() {
-  const [items, setItems] = useState<RecentWork[]>([]);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-
-  useEffect(() => {
-    let cancelled = false;
-    // 走 hyper 扩展后台 fetch（Gecko 网络栈，无 CORS，支持 ECH/DoH）
-    sendBackgroundCommand<string>("ao3.fetchHtml", { url: "https://archiveofourown.org/works" })
-      .then((html) => {
-        if (cancelled) return;
-        if (typeof html !== "string" || html.length === 0) {
-          setState("error");
-          return;
-        }
-        try {
-          const doc = new DOMParser().parseFromString(html, "text/html");
-          const parsed: RecentWork[] = Array.from(doc.querySelectorAll("li.work.blurb"))
-            .slice(0, 8)
-            .map((li) => {
-              const a = li.querySelector("h4.heading a[href]");
-              const author = li.querySelector("a.rel.author");
-              const href = a?.getAttribute("href") || "";
-              return {
-                title: (a?.textContent || "").trim() || "(untitled)",
-                url: href ? new URL(href, "https://archiveofourown.org").href : "",
-                author: (author?.textContent || "").trim(),
-              };
-            })
-            .filter((work) => work.url.length > 0);
-          setItems(parsed);
-          setState("ready");
-        } catch {
-          setState("error");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const openWorks = () => {
-    window.location.href = "https://archiveofourown.org/works";
-  };
-
-  return (
-    <section className="ao3-recent">
-      <div className="ao3-recent-head">
-        <span>最近作品</span>
-        <button type="button" className="ao3-recent-more" onClick={openWorks}>更多 →</button>
-      </div>
-      {state === "loading" && <div className="ao3-recent-note">加载最近作品中…</div>}
-      {state === "error" && (
-        <button type="button" className="ao3-recent-fallback" onClick={openWorks}>
-          最近作品加载失败，点此直接打开 AO3
-        </button>
-      )}
-      {state === "ready" && items.length === 0 && (
-        <button type="button" className="ao3-recent-fallback" onClick={openWorks}>
-          暂无最近作品，点此打开 AO3
-        </button>
-      )}
-      {state === "ready" && items.length > 0 && (
-        <ul className="ao3-recent-list">
-          {items.map((work) => (
-            <li key={work.url}>
-              <button
-                type="button"
-                className="ao3-recent-item"
-                onClick={() => {
-                  window.location.href = work.url;
-                }}
-              >
-                <span className="ao3-recent-title">{work.title}</span>
-                {work.author.length > 0 && <span className="ao3-recent-author">{work.author}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 
