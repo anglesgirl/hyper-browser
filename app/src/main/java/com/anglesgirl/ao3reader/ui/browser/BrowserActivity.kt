@@ -2190,7 +2190,7 @@ private fun BrowserScreen(
                     onSwipeClose = ::stageBrowserTabCloseAfterSwipe,
                     onCloseAll = { closeAllBrowserTabs() },
                     onNewTab = {
-                        val newTab = createBrowserTab(GeckoSessionController.HOME_URL)
+                        val newTab = createBrowserTab(GeckoSessionController.DEFAULT_HOME_URL)
                         tabs.add(newTab)
                         selectedTabId = newTab.id
                         closePanel()
@@ -2255,7 +2255,7 @@ private fun BrowserScreen(
                             }
                         },
                         onNewTab = {
-                            val newTab = createBrowserTab(GeckoSessionController.HOME_URL)
+                            val newTab = createBrowserTab(GeckoSessionController.DEFAULT_HOME_URL)
                             tabs.add(newTab)
                             selectedTabId = newTab.id
                             closePanel()
