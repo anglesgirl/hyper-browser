@@ -75,6 +75,13 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --console=plain
 
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AO3Reader-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
   companion-extension:
     name: Check companion extension
     runs-on: ubuntu-latest
