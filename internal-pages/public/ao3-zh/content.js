@@ -32043,3 +32043,48 @@ const I18N = {
 	}
 
 })(window, document);
+
+// ===== AO3 Reader 图片代理（远程图/防盗链图打不开时） =====
+// 默认走公共图片代理 images.weserv.nl（免费，Cloudflare CDN）；可在设置里换成自建代理
+// 存储 key：img_proxy_enabled（默认 true）、img_proxy_url（自定义代理前缀，空=内置）
+;(function () {
+  try {
+    var enabled = window.GM_getValue('img_proxy_enabled', true);
+    if (enabled === false || enabled === 'false') return;
+    var proxy = 'https://images.weserv.nl/?url=';
+    var custom = window.GM_getValue('img_proxy_url', '');
+    if (custom) proxy = custom;
+  } catch (e) { return; }
+
+  function rewrite(img) {
+    try {
+      if (img.dataset.ao3Proxy) return;
+      var src = img.currentSrc || img.src || '';
+      if (!src || src.indexOf('data:') === 0) return;
+      var u = new URL(src);
+      var host = u.hostname;
+      if (host === 'archiveofourown.org' || host.endsWith('.archiveofourown.org')) return; // 站内图不动
+      if (src.indexOf(proxy.split('?')[0]) >= 0) return; // 已在代理链路上，防循环
+      img.dataset.ao3Proxy = '1';
+      img.dataset.ao3Original = src;
+      img.src = proxy + encodeURIComponent(src);
+      img.removeAttribute('srcset');
+      img.removeAttribute('sizes');
+    } catch (e) {}
+  }
+  function scan() {
+    try { document.querySelectorAll('img').forEach(rewrite); } catch (e) {}
+  }
+  scan();
+  try {
+    var mo = new MutationObserver(function (muts) {
+      var dirty = false;
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].addedNodes && muts[i].addedNodes.length) { dirty = true; break; }
+      }
+      if (dirty) scan();
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
+  setTimeout(scan, 1500); // 懒加载图再扫一次
+})();
