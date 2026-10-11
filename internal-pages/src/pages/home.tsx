@@ -198,24 +198,17 @@ function RecentWorks() {
 
   useEffect(() => {
     let cancelled = false;
-    const message = browser?.runtime?.sendMessage?.({
-      type: "ao3.fetchHtml",
-      url: "https://archiveofourown.org/works",
-    });
-    if (!message || typeof message.then !== "function") {
-      setState("error");
-      return;
-    }
-    message
-      .then((resp: unknown) => {
+    // 走原生桥（hyperBrowser.fetchHtml → Kotlin OkHttp）拉取，无跨扩展/CORS 限制
+    window.hyperBrowser
+      .fetchHtml("https://archiveofourown.org/works")
+      .then((html) => {
         if (cancelled) return;
-        const r = resp as { ok?: boolean; data?: unknown } | null;
-        if (!r || r.ok !== true || typeof r.data !== "string") {
+        if (typeof html !== "string" || html.length === 0) {
           setState("error");
           return;
         }
         try {
-          const doc = new DOMParser().parseFromString(r.data, "text/html");
+          const doc = new DOMParser().parseFromString(html, "text/html");
           const parsed: RecentWork[] = Array.from(doc.querySelectorAll("li.work.blurb"))
             .slice(0, 8)
             .map((li) => {

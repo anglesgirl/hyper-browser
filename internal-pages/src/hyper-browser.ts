@@ -152,7 +152,8 @@ type HyperBridgeMessageType =
   | "apps.pin"
   | "apps.icon.choose"
   | "panel.extensions"
-  | "panel.downloads";
+  | "panel.downloads"
+  | "ao3.fetchHtml";
 
 type BridgePayload = Record<string, string>;
 
@@ -202,6 +203,7 @@ type HyperBrowserApi = {
   showSettings(): void;
   showExtensions(): void;
   showDownloads(): void;
+  fetchHtml(url: string): Promise<string>;
   requestHomeData(): Promise<HistoryItem[]>;
   requestAppsData(): Promise<WebAppItem[]>;
   requestSettingsData(): Promise<BrowserSettings>;
@@ -308,6 +310,9 @@ window.hyperBrowser = {
   },
   showDownloads() {
     command("panel.downloads");
+  },
+  fetchHtml(url: string) {
+    return send("ao3.fetchHtml", { url }).then((response) => String(response.data ?? ""));
   },
   requestHomeData() {
     return requestData<HistoryItem>("data.home");

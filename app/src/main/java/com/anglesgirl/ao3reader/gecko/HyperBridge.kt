@@ -53,7 +53,8 @@ object HyperBridge {
         "apps.pin",
         "apps.icon.choose",
         "panel.extensions",
-        "panel.downloads"
+        "panel.downloads",
+        "ao3.fetchHtml"
     )
     private val CONTENT_SCRIPT_MESSAGE_TYPES = setOf(
         "pullRefresh.touch",
