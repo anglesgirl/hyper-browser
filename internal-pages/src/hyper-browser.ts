@@ -151,7 +151,8 @@ type HyperBridgeMessageType =
   | "apps.openStandalone"
   | "apps.pin"
   | "apps.icon.choose"
-  | "panel.extensions";
+  | "panel.extensions"
+  | "panel.downloads";
 
 type BridgePayload = Record<string, string>;
 
@@ -200,6 +201,7 @@ type HyperBrowserApi = {
   showHistory(): void;
   showSettings(): void;
   showExtensions(): void;
+  showDownloads(): void;
   requestHomeData(): Promise<HistoryItem[]>;
   requestAppsData(): Promise<WebAppItem[]>;
   requestSettingsData(): Promise<BrowserSettings>;
