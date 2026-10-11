@@ -599,6 +599,41 @@ class ExtensionRepository(
         )
     }
 
+    /**
+     * 安装随包内置的 AO3 Translator 扩展（V-Lipset/ao3-chinese，GPL-3.0）。
+     * XPI 打包在 assets（internal-pages/public/ao3-zh.xpi -> assets/ao3-zh.xpi），
+     * 首次启动复制到 filesDir 走标准 WebExtensionController.install 通道，
+     * 与 AMO 安装同链路（background 网络权限正常授予），幂等。
+     */
+    suspend fun installBundledA03Zh() {
+        val guid = "ao3-zh@anglesgirl.com"
+        if (findRuntimeExtension(guid) != null) return
+        if (installedState.value.any { it.guid == guid }) return
+
+        val xpi = withContext(Dispatchers.IO) {
+            val src = context.assets.open("ao3-zh.xpi")
+            val extensionDir = File(context.filesDir, "extensions").apply { mkdirs() }
+            val target = File(extensionDir, "ao3-zh-1.10.2.xpi")
+            if (target.exists() && target.length() > 0) return@withContext target
+            target.outputStream().use { out -> src.copyTo(out) }
+            target
+        }
+
+        installRaw(xpi)
+        upsertInstalled(
+            InstalledExtensionState(
+                guid = guid,
+                name = "AO3 Translator",
+                version = "1.10.2",
+                enabled = true,
+                source = "Bundled",
+                permissionsSnapshot = "http://*/*, https://*/*",
+                xpiPath = xpi.absolutePath,
+                installedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     private fun WebExtension.toInstalledState(
         existing: InstalledExtensionState?,
         enabledOverride: Boolean? = null

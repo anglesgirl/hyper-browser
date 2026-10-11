@@ -14,8 +14,6 @@ object HyperBridge {
     private const val TAG = "HyperBridge"
     private const val EXTENSION_LOCATION = "resource://android/assets/"
     private const val EXTENSION_ID = "hyper-browser-internal@dadigua.com"
-    private const val AO3ZH_EXTENSION_LOCATION = "resource://android/assets/ao3-zh/"
-    private const val AO3ZH_EXTENSION_ID = "ao3-zh@anglesgirl.com"
     private const val NATIVE_APP = "hyperBrowser"
     private const val NATIVE_COMMAND_PORT_TARGET = "hyper.internal.nativeCommandPort"
     private const val SESSION_COMMAND_PORT_TARGET = "hyper.internal.sessionCommand"
@@ -142,8 +140,6 @@ object HyperBridge {
                     Log.e(TAG, "Internal extension install returned null")
                     return@accept
                 }
-                // 内置扩展就绪后，顺带安装 AO3 Translator（V-Lipset/ao3-chinese 汉化）
-                ensureAo3ZhInstalled(context)
                 Handler(Looper.getMainLooper()).post {
                     installed.setMessageDelegate(messageDelegate, NATIVE_APP)
                     val callbacks = synchronized(this) {
@@ -163,24 +159,6 @@ object HyperBridge {
             })
     }
 
-    /**
-     * 安装内置 AO3 Translator 汉化扩展（V-Lipset/ao3-chinese，GPL-3.0）
-     * 通过 GeckoView ensureBuiltIn 从 assets 加载，首次调用即安装，之后幂等。
-     */
-    fun ensureAo3ZhInstalled(context: Context) {
-        GeckoRuntimeProvider.get(context).webExtensionController
-            .ensureBuiltIn(AO3ZH_EXTENSION_LOCATION, AO3ZH_EXTENSION_ID)
-            .accept(
-                { installed ->
-                    if (installed == null) {
-                        Log.e(TAG, "AO3 Translator install returned null")
-                    } else {
-                        Log.i(TAG, "AO3 Translator installed: ${installed.id}")
-                    }
-                },
-                { throwable -> Log.e(TAG, "Failed to install AO3 Translator", throwable) }
-            )
-    }
 
     fun register(session: GeckoSession, handler: (JSONObject) -> GeckoResult<Any>, useAsFallback: Boolean = true) {
         handlers[session] = handler

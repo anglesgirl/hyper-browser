@@ -146,6 +146,10 @@ class BrowserActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeWebNotificationIntent(intent)
+        // 首启自动安装随包内置的 AO3 Translator 扩展（标准 WebExtension 通道，可管理可开关）
+        lifecycleScope.launch {
+            runCatching { (application as HyperBrowserApp).extensions.installBundledA03Zh() }
+        }
         val initialIntent = intent.toExternalBrowserIntent()
         val initialUrl = if (initialIntent?.download == false && initialIntent.url != null) {
             initialIntent.url
