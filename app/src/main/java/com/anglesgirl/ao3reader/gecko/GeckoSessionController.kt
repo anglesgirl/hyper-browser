@@ -1722,5 +1722,6 @@ sealed interface HyperCommand {
 
     sealed interface Panel : HyperCommand {
         data object Extensions : Panel
+        data object Downloads : Panel
     }
 }

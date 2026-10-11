@@ -304,6 +304,9 @@ window.hyperBrowser = {
   showExtensions() {
     command("panel.extensions");
   },
+  showDownloads() {
+    command("panel.downloads");
+  },
   requestHomeData() {
     return requestData<HistoryItem>("data.home");
   },

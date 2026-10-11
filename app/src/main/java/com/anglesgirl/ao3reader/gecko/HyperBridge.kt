@@ -52,7 +52,8 @@ object HyperBridge {
         "apps.openStandalone",
         "apps.pin",
         "apps.icon.choose",
-        "panel.extensions"
+        "panel.extensions",
+        "panel.downloads"
     )
     private val CONTENT_SCRIPT_MESSAGE_TYPES = setOf(
         "pullRefresh.touch",

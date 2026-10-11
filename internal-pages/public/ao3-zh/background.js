@@ -29,6 +29,25 @@
 
   if (typeof browser !== "undefined" && browser.runtime && browser.runtime.onMessage) {
     browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      // 主页"最近作品"拉取：hyper://home 请求 AO3 页面 HTML（跨域，走扩展权限）
+      if (msg && msg.type === "ao3.fetchHtml" && msg.url) {
+        doFetch({
+          url: msg.url,
+          method: "GET",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36",
+            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+          },
+          timeout: 20000,
+        })
+          .then((resp) =>
+            resp.status >= 200 && resp.status < 300
+              ? sendResponse({ ok: true, data: resp.responseText })
+              : sendResponse({ ok: false, error: "HTTP " + resp.status })
+          )
+          .catch((err) => sendResponse({ ok: false, error: String((err && err.name) || err || "network") }));
+        return true;
+      }
       if (!msg || msg.type !== "GM_xmlhttpRequest" || !msg.url) {
         sendResponse({ error: "bad_message", readyState: 0 });
         return;

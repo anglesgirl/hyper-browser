@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   DEFAULT_LAUNCHER_DOCK_ENTRY_IDS,
@@ -127,6 +127,10 @@ function HomePage() {
 
   return (
     <>
+      <div className="ao3-home-top">
+        <QuickLinks />
+        <RecentWorks />
+      </div>
       <LauncherPage
         labels={launcherLabels}
         platform={platform}
@@ -139,6 +143,146 @@ function HomePage() {
       />
       {webDavSync.settingsDialog}
     </>
+  );
+}
+
+// ===== AO3 Reader 常用入口卡片 =====
+type QuickLink = {
+  label: string;
+  url?: string;
+  downloads?: boolean;
+  color: string;
+};
+
+const QUICK_LINKS: QuickLink[] = [
+  { label: "作品库", url: "https://archiveofourown.org/works", color: "#d73547" },
+  { label: "搜索", url: "https://archiveofourown.org/search", color: "#0d7f66" },
+  { label: "收藏", url: "https://archiveofourown.org/bookmarks", color: "#7b4fd8" },
+  { label: "我的下载", downloads: true, color: "#f4a900" },
+];
+
+function QuickLinks() {
+  return (
+    <div className="ao3-quicklinks">
+      {QUICK_LINKS.map((link) => (
+        <button
+          key={link.label}
+          type="button"
+          className="ao3-quicklink"
+          style={{ borderTopColor: link.color }}
+          onClick={() => {
+            if (link.downloads) {
+              window.hyperBrowser.showDownloads();
+            } else if (link.url) {
+              window.location.href = link.url;
+            }
+          }}
+        >
+          <span className="ao3-quicklink-label">{link.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ===== AO3 Reader 最近作品（经 ao3-zh 扩展后台拉取解析） =====
+type RecentWork = {
+  title: string;
+  url: string;
+  author: string;
+};
+
+function RecentWorks() {
+  const [items, setItems] = useState<RecentWork[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    const message = browser?.runtime?.sendMessage?.({
+      type: "ao3.fetchHtml",
+      url: "https://archiveofourown.org/works",
+    });
+    if (!message || typeof message.then !== "function") {
+      setState("error");
+      return;
+    }
+    message
+      .then((resp: unknown) => {
+        if (cancelled) return;
+        const r = resp as { ok?: boolean; data?: unknown } | null;
+        if (!r || r.ok !== true || typeof r.data !== "string") {
+          setState("error");
+          return;
+        }
+        try {
+          const doc = new DOMParser().parseFromString(r.data, "text/html");
+          const parsed: RecentWork[] = Array.from(doc.querySelectorAll("li.work.blurb"))
+            .slice(0, 8)
+            .map((li) => {
+              const a = li.querySelector("h4.heading a[href]");
+              const author = li.querySelector("a.rel.author");
+              const href = a?.getAttribute("href") || "";
+              return {
+                title: (a?.textContent || "").trim() || "(untitled)",
+                url: href ? new URL(href, "https://archiveofourown.org").href : "",
+                author: (author?.textContent || "").trim(),
+              };
+            })
+            .filter((work) => work.url.length > 0);
+          setItems(parsed);
+          setState("ready");
+        } catch {
+          setState("error");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openWorks = () => {
+    window.location.href = "https://archiveofourown.org/works";
+  };
+
+  return (
+    <section className="ao3-recent">
+      <div className="ao3-recent-head">
+        <span>最近作品</span>
+        <button type="button" className="ao3-recent-more" onClick={openWorks}>更多 →</button>
+      </div>
+      {state === "loading" && <div className="ao3-recent-note">加载最近作品中…</div>}
+      {state === "error" && (
+        <button type="button" className="ao3-recent-fallback" onClick={openWorks}>
+          最近作品加载失败，点此直接打开 AO3
+        </button>
+      )}
+      {state === "ready" && items.length === 0 && (
+        <button type="button" className="ao3-recent-fallback" onClick={openWorks}>
+          暂无最近作品，点此打开 AO3
+        </button>
+      )}
+      {state === "ready" && items.length > 0 && (
+        <ul className="ao3-recent-list">
+          {items.map((work) => (
+            <li key={work.url}>
+              <button
+                type="button"
+                className="ao3-recent-item"
+                onClick={() => {
+                  window.location.href = work.url;
+                }}
+              >
+                <span className="ao3-recent-title">{work.title}</span>
+                {work.author.length > 0 && <span className="ao3-recent-author">{work.author}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

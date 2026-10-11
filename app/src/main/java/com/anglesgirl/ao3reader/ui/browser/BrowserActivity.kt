@@ -1861,6 +1861,7 @@ private fun BrowserScreen(
                 }
             }
             HyperCommand.Panel.Extensions -> showPanel(BrowserPanel.Extensions)
+            HyperCommand.Panel.Downloads -> showPanel(BrowserPanel.Downloads)
         }
         pendingHyperCommand = null
     }
