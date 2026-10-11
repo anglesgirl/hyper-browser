@@ -101,6 +101,22 @@ function startBackground(): void {
 }
 
 async function handleBackgroundCommand(message: { type: string; payload?: unknown }): Promise<unknown> {
+  // AO3 页面拉取：扩展后台上下文无 CORS 限制，走 Gecko 网络栈（ECH/DoH 生效）
+  if (message.type === "ao3.fetchHtml") {
+    const url = (message.payload as { url?: string } | undefined)?.url ?? "";
+    if (
+      !url.startsWith("https://archiveofourown.org/") &&
+      !url.startsWith("https://www.archiveofourown.org/")
+    ) {
+      throw new Error("Invalid URL.");
+    }
+    const response = await fetch(url, {
+      credentials: "omit",
+      headers: { Accept: "text/html,application/xhtml+xml,*/*;q=0.8" },
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    return await response.text();
+  }
   const shared = await hyperCommands.handle(message);
   if (shared.handled) return shared.data;
   throw new Error("Unknown background command.");

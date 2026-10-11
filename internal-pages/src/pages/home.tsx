@@ -198,9 +198,8 @@ function RecentWorks() {
 
   useEffect(() => {
     let cancelled = false;
-    // 走原生桥（hyperBrowser.fetchHtml → Kotlin OkHttp）拉取，无跨扩展/CORS 限制
-    window.hyperBrowser
-      .fetchHtml("https://archiveofourown.org/works")
+    // 走 hyper 扩展后台 fetch（Gecko 网络栈，无 CORS，支持 ECH/DoH）
+    sendBackgroundCommand<string>("ao3.fetchHtml", { url: "https://archiveofourown.org/works" })
       .then((html) => {
         if (cancelled) return;
         if (typeof html !== "string" || html.length === 0) {

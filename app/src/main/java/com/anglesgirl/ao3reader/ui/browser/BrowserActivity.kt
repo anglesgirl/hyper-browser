@@ -106,16 +106,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
 import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.WebNotification
-import java.io.IOException
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 private const val BROWSER_ACTIVITY_TAG = "BrowserActivity"
 private const val WEB_DAV_SYNC_CLIENT_VERSION = "3"
@@ -141,11 +137,6 @@ internal fun isCurrentPendingSwipeClose(
 
 class BrowserActivity : ComponentActivity() {
     private val externalIntents = MutableSharedFlow<ExternalBrowserIntent>(extraBufferCapacity = 1)
-    private val bridgeHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
 
     override fun attachBaseContext(newBase: Context) {
         val localePreference = BrowserProfileStore.loadBrowserSettings(newBase).localePreference
@@ -968,35 +959,6 @@ private fun BrowserScreen(
             "panel.downloads" -> {
                 pendingHyperCommand = HyperCommand.Panel.Downloads
                 ok()
-            }
-            "ao3.fetchHtml" -> {
-                val targetUrl = payload.optString("url").trim()
-                val allowedHosts = listOf("https://archiveofourown.org/", "https://www.archiveofourown.org/")
-                if (allowedHosts.none { targetUrl.startsWith(it) }) {
-                    return bridgeError("Invalid URL.")
-                }
-                val result = GeckoResult<Any>()
-                scope.launch(Dispatchers.IO) {
-                    val response: JSONObject
-                    try {
-                        val request = Request.Builder()
-                            .url(targetUrl)
-                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-                            .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
-                            .build()
-                        val resp = bridgeHttpClient.newCall(request).execute()
-                        response = if (resp.isSuccessful) {
-                            JSONObject().put("ok", true).put("data", resp.body?.string().orEmpty())
-                        } else {
-                            JSONObject().put("ok", false).put("error", "HTTP ${resp.code}")
-                        }
-                        resp.close()
-                    } catch (e: Exception) {
-                        response = JSONObject().put("ok", false).put("error", e.message ?: "fetch failed")
-                    }
-                    completeBridgeResult(result, response)
-                }
-                return result
             }
             else -> JSONObject().put("ok", false).put("error", "Unknown bridge message.")
         }
