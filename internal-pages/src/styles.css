@@ -1215,14 +1215,17 @@ a {
   font-size: 12px;
 }
 
-/* ===== AO3 Reader 主页：常用入口 + 最近作品 ===== */
+/* ===== AO3 Reader 主页：常用入口 ===== */
 .ao3-home-top {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 24px) 24px 0;
+  /* 顶部下移：避开右上角 fixed 设置按钮（top:16px 高 36px）的热区，防止点击穿透 */
+  padding: calc(env(safe-area-inset-top) + 64px) 24px 0;
 }
 
 .ao3-quicklinks {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
