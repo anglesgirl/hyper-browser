@@ -65,7 +65,7 @@
             android:documentLaunchMode="intoExisting"
             android:exported="true"
             android:resizeableActivity="true"
-            android:taskAffinity="com.dadigua.hyperbrowser.webapp"
+            android:taskAffinity="com.anglesgirl.ao3reader.webapp"
             android:windowSoftInputMode="stateUnspecified|adjustResize" />
 
         <activity
@@ -74,7 +74,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:resizeableActivity="true"
-            android:taskAffinity="com.dadigua.hyperbrowser.browser"
+            android:taskAffinity="com.anglesgirl.ao3reader.browser"
             android:windowSoftInputMode="stateUnspecified|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

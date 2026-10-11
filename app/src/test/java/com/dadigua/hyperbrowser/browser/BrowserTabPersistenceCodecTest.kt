@@ -1,4 +1,4 @@
-package com.dadigua.hyperbrowser.browser
+package com.anglesgirl.ao3reader.browser
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,7 +26,7 @@ class BrowserTabPersistenceCodecTest {
                     title = "Example Domain",
                     url = "https://example.com/",
                     input = "example.com",
-                    iconPath = "/data/user/0/com.dadigua.hyperbrowser/files/favicon.png",
+                    iconPath = "/data/user/0/com.anglesgirl.ao3reader/files/favicon.png",
                     loaded = false
                 )
             )

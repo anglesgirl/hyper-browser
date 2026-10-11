@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Hyper Browser</string>
+    <string name="app_name">AO3 Reader</string>
     <string name="prompt_title_message">Message</string>
     <string name="prompt_title_confirm">Confirm</string>
     <string name="prompt_title_input">Input</string>

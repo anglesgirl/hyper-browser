@@ -1,0 +1,124 @@
+package com.anglesgirl.ao3reader.ui.browser
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.anglesgirl.ao3reader.browser.BrowserSettings
+import com.anglesgirl.ao3reader.extensions.ExtensionPopupState
+import com.anglesgirl.ao3reader.gecko.GeckoBrowserView
+import com.anglesgirl.ao3reader.gecko.GeckoSessionController
+
+@Composable
+internal fun BrowserContent(
+    controller: GeckoSessionController,
+    tabId: String,
+    extensionPopup: ExtensionPopupState?,
+    onClosePopup: () -> Unit,
+    modifier: Modifier = Modifier,
+    imeAvoidanceEnabled: Boolean = true,
+    onContentTouchStarted: () -> Unit = {},
+    onContentScrollDelta: (Float) -> Unit = {}
+) {
+    val contentPageState by controller.state.collectAsState()
+    Box(modifier = modifier.fillMaxSize()) {
+        key(tabId) {
+            GeckoBrowserView(
+                controller = controller,
+                modifier = Modifier.fillMaxSize(),
+                imeAvoidanceEnabled = imeAvoidanceEnabled,
+                onContentTouchStarted = onContentTouchStarted,
+                onContentScrollDelta = onContentScrollDelta
+            )
+        }
+        TopPageLoadingProgressBar(
+            loading = contentPageState.isLoading,
+            progress = contentPageState.loadProgress,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
+        extensionPopup?.let { popup ->
+            ExtensionPopupOverlay(
+                popup = popup,
+                onClose = onClosePopup
+            )
+        }
+    }
+}
+
+@Composable
+private fun TopPageLoadingProgressBar(
+    loading: Boolean,
+    progress: Int,
+    modifier: Modifier = Modifier
+) {
+    if (!loading) return
+    val normalizedProgress = (progress.coerceIn(0, 100) / 100f).coerceAtLeast(0.08f)
+    LinearProgressIndicator(
+        progress = { normalizedProgress },
+        modifier = modifier
+            .fillMaxWidth()
+            .height(2.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = Color.Transparent
+    )
+}
+
+@Composable
+internal fun BrowserTip(
+    message: String?,
+    toolbarPosition: String,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    if (message == null) return
+    val bottomPadding = if (BrowserSettings.isBottomToolbarPosition(toolbarPosition)) 72.dp else 24.dp
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 18.dp, end = 18.dp, bottom = bottomPadding),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(Color(0xE6202124))
+                .padding(start = 16.dp, end = if (actionLabel == null) 16.dp else 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(vertical = 10.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (actionLabel != null) {
+                TextButton(onClick = onAction) {
+                    Text(actionLabel)
+                }
+            }
+        }
+    }
+}

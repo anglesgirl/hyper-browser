@@ -1,6 +1,6 @@
-package com.dadigua.hyperbrowser.ui.browser
+package com.anglesgirl.ao3reader.ui.browser
 
-import com.dadigua.hyperbrowser.gecko.GeckoPageState
+import com.anglesgirl.ao3reader.gecko.GeckoPageState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse

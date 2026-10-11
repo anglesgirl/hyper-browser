@@ -1,7 +1,7 @@
-package com.dadigua.hyperbrowser.ui.browser
+package com.anglesgirl.ao3reader.ui.browser
 
-import com.dadigua.hyperbrowser.browser.SavedBrowserTab
-import com.dadigua.hyperbrowser.browser.SavedBrowserTabs
+import com.anglesgirl.ao3reader.browser.SavedBrowserTab
+import com.anglesgirl.ao3reader.browser.SavedBrowserTabs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

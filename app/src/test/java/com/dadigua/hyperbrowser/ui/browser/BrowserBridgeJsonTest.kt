@@ -1,7 +1,7 @@
-package com.dadigua.hyperbrowser.ui.browser
+package com.anglesgirl.ao3reader.ui.browser
 
-import com.dadigua.hyperbrowser.browser.BrowserSettings
-import com.dadigua.hyperbrowser.update.UpdateDownloadState
+import com.anglesgirl.ao3reader.browser.BrowserSettings
+import com.anglesgirl.ao3reader.update.UpdateDownloadState
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals

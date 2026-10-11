@@ -1,4 +1,4 @@
-package com.dadigua.hyperbrowser.ui.browser
+package com.anglesgirl.ao3reader.ui.browser
 
 import androidx.compose.material3.SwipeToDismissBoxValue
 import org.junit.Assert.assertFalse

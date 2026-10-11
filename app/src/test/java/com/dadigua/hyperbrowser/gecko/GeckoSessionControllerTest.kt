@@ -1,4 +1,4 @@
-package com.dadigua.hyperbrowser.gecko
+package com.anglesgirl.ao3reader.gecko
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

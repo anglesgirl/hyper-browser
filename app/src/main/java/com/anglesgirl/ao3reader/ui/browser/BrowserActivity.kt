@@ -1,0 +1,2609 @@
+package com.anglesgirl.ao3reader.ui.browser
+
+import android.Manifest
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
+import android.security.KeyChain
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.core.content.IntentCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import com.anglesgirl.ao3reader.HyperBrowserApp
+import com.anglesgirl.ao3reader.R
+import com.anglesgirl.ao3reader.browser.BrowserDownloadEntry
+import com.anglesgirl.ao3reader.browser.DownloadHandler
+import com.anglesgirl.ao3reader.browser.DownloadStatus
+import com.anglesgirl.ao3reader.browser.DownloadStore
+import com.anglesgirl.ao3reader.browser.FaviconRepository
+import com.anglesgirl.ao3reader.backup.BrowserBackupManager
+import com.anglesgirl.ao3reader.backup.BrowserBackupImportPreview
+import com.anglesgirl.ao3reader.backup.previewBrowserBackupImport
+import com.anglesgirl.ao3reader.browser.BrowserProfileStore
+import com.anglesgirl.ao3reader.browser.BrowserSettings
+import com.anglesgirl.ao3reader.browser.BrowserMediaNotificationController
+import com.anglesgirl.ao3reader.browser.SavedBrowserTabs
+import com.anglesgirl.ao3reader.data.InstalledExtensionState
+import com.anglesgirl.ao3reader.data.WebAppDefinition
+import com.anglesgirl.ao3reader.extensions.AmoAddonListing
+import com.anglesgirl.ao3reader.extensions.ExtensionTabCommand
+import com.anglesgirl.ao3reader.extensions.extensionTabInsertionIndex
+import com.anglesgirl.ao3reader.gecko.GeckoAuthPromptRequest
+import com.anglesgirl.ao3reader.gecko.GeckoCertificatePromptRequest
+import com.anglesgirl.ao3reader.gecko.GeckoContextMenuTarget
+import com.anglesgirl.ao3reader.gecko.GeckoDownloadRequest
+import com.anglesgirl.ao3reader.gecko.GeckoFilePromptRequest
+import com.anglesgirl.ao3reader.gecko.GeckoPageSecurity
+import com.anglesgirl.ao3reader.gecko.GeckoPromptRequest
+import com.anglesgirl.ao3reader.gecko.GeckoSharePromptRequest
+import com.anglesgirl.ao3reader.gecko.GeckoRuntimeProvider
+import com.anglesgirl.ao3reader.gecko.GeckoSessionController
+import com.anglesgirl.ao3reader.gecko.HyperBridge
+import com.anglesgirl.ao3reader.gecko.HyperCommand
+import com.anglesgirl.ao3reader.gecko.HyperRoute
+import com.anglesgirl.ao3reader.sync.WebDavLocalSyncAdapter
+import com.anglesgirl.ao3reader.ui.FullscreenSystemBarsEffect
+import com.anglesgirl.ao3reader.ui.theme.HyperBrowserTheme
+import com.anglesgirl.ao3reader.ui.withAppLocale
+import com.anglesgirl.ao3reader.ui.webapp.WebAppActivity
+import com.anglesgirl.ao3reader.update.AppUpdateManager
+import com.anglesgirl.ao3reader.update.AvailableUpdate
+import com.anglesgirl.ao3reader.update.UpdateDownloadState
+import com.anglesgirl.ao3reader.update.UpdateSettingsStore
+import com.anglesgirl.ao3reader.webapp.PinnedShortcutRequestResult
+import com.anglesgirl.ao3reader.webapp.WebAppIconPresets
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import org.mozilla.geckoview.AllowOrDeny
+import org.mozilla.geckoview.GeckoResult
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.WebNotification
+import java.util.UUID
+
+private const val BROWSER_ACTIVITY_TAG = "BrowserActivity"
+private const val WEB_DAV_SYNC_CLIENT_VERSION = "3"
+private const val TAB_CLOSE_UNDO_TIMEOUT_MS = 5_000L
+
+private data class PendingBackupImport(
+    val rawJson: String,
+    val preview: BrowserBackupImportPreview
+)
+
+private data class PendingSwipeClosedTab(
+    val tab: BrowserTabRuntime,
+    val originalIndex: Int,
+    val selectedTabIdBeforeClose: String,
+    val temporaryReplacementTabId: String?,
+    val requestToken: UUID
+)
+
+internal fun isCurrentPendingSwipeClose(
+    expectedToken: UUID,
+    currentToken: UUID?
+): Boolean = currentToken == expectedToken
+
+class BrowserActivity : ComponentActivity() {
+    private val externalIntents = MutableSharedFlow<ExternalBrowserIntent>(extraBufferCapacity = 1)
+
+    override fun attachBaseContext(newBase: Context) {
+        val localePreference = BrowserProfileStore.loadBrowserSettings(newBase).localePreference
+        super.attachBaseContext(newBase.withAppLocale(localePreference))
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        consumeWebNotificationIntent(intent)
+        val initialIntent = intent.toExternalBrowserIntent()
+        val initialUrl = if (initialIntent?.download == false && initialIntent.url != null) {
+            initialIntent.url
+        } else {
+            GeckoSessionController.HOME_URL
+        }
+        setContent {
+            val app = application as HyperBrowserApp
+            val profileStore = remember { app.profileStore }
+            HyperBrowserTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    BrowserScreen(
+                        activity = this@BrowserActivity,
+                        app = app,
+                        profileStore = profileStore,
+                        initialUrl = initialUrl,
+                        initialDownloadUrl = initialIntent?.url?.takeIf { initialIntent.download },
+                        initialShowDownloads = initialIntent?.showDownloads == true,
+                        initialSelectTabId = initialIntent?.selectTabId,
+                        externalIntents = externalIntents
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (!consumeWebNotificationIntent(intent)) {
+            intent.toExternalBrowserIntent()?.let { externalIntents.tryEmit(it) }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        BrowserMediaNotificationController.get(this).cancelBackgroundPlaybackResume("foreground")
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        BrowserMediaNotificationController.get(this).allowBackgroundPlaybackResume()
+    }
+
+    private fun consumeWebNotificationIntent(intent: Intent): Boolean {
+        val notification = IntentCompat.getParcelableExtra(
+            intent,
+            EXTRA_WEB_NOTIFICATION,
+            WebNotification::class.java
+        ) ?: return false
+        val action = intent.getStringExtra(EXTRA_WEB_NOTIFICATION_ACTION)
+        if (action.isNullOrBlank()) {
+            notification.click()
+        } else {
+            notification.click(action)
+        }
+        intent.removeExtra(EXTRA_WEB_NOTIFICATION)
+        intent.removeExtra(EXTRA_WEB_NOTIFICATION_ACTION)
+        return true
+    }
+
+    companion object {
+        const val EXTRA_URL = "extra_url"
+        const val EXTRA_SHOW_DOWNLOADS = "extra_show_downloads"
+        const val EXTRA_SELECT_TAB_ID = "extra_select_tab_id"
+        const val EXTRA_OPEN_IN_NEW_TAB = "extra_open_in_new_tab"
+        private const val EXTRA_WEB_NOTIFICATION = "extra_web_notification"
+        private const val EXTRA_WEB_NOTIFICATION_ACTION = "extra_web_notification_action"
+
+        fun intent(context: Context, url: String): Intent =
+            Intent(context, BrowserActivity::class.java).putExtra(EXTRA_URL, url)
+
+        fun newTabIntent(context: Context, url: String): Intent =
+            Intent(context, BrowserActivity::class.java)
+                .putExtra(EXTRA_URL, url)
+                .putExtra(EXTRA_OPEN_IN_NEW_TAB, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+        fun selectTabIntent(context: Context, tabId: String): Intent =
+            Intent(context, BrowserActivity::class.java)
+                .putExtra(EXTRA_SELECT_TAB_ID, tabId)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+        fun downloadsIntent(context: Context): Intent =
+            Intent(context, BrowserActivity::class.java)
+                .putExtra(EXTRA_SHOW_DOWNLOADS, true)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+        fun webNotificationIntent(
+            context: Context,
+            notification: WebNotification,
+            action: String?
+        ): Intent =
+            Intent(context, BrowserActivity::class.java)
+                .putExtra(EXTRA_WEB_NOTIFICATION, notification)
+                .apply {
+                    if (!action.isNullOrBlank()) {
+                        putExtra(EXTRA_WEB_NOTIFICATION_ACTION, action)
+                    }
+                }
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                )
+    }
+}
+
+private enum class BrowserPanel {
+    None,
+    Search,
+    Settings,
+    Bookmarks,
+    History,
+    Downloads,
+    Extensions,
+    Tabs
+}
+
+private const val TAB_THUMBNAIL_PAGE_STOP_REFRESH_DELAY_MS = 700L
+private val ToolbarAutoHideDragRange = 72.dp
+
+internal fun adjacentTabId(tabIds: List<String>, selectedTabId: String, step: Int): String? {
+    if (step != -1 && step != 1) return null
+    val selectedIndex = tabIds.indexOf(selectedTabId)
+    if (selectedIndex < 0) return null
+    return tabIds.getOrNull(selectedIndex + step)
+}
+
+internal fun shouldSwitchToFocusedTab(
+    requestedTabId: String,
+    requestedOpenerTabId: String?,
+    requestedIsPopupSession: Boolean,
+    selectedTabId: String,
+    selectedOpenerTabId: String?,
+    selectedIsPopupSession: Boolean
+): Boolean {
+    if (requestedTabId == selectedTabId) return false
+    return (requestedIsPopupSession && requestedOpenerTabId == selectedTabId) ||
+        (selectedIsPopupSession && selectedOpenerTabId == requestedTabId)
+}
+
+@Composable
+private fun BrowserScreen(
+    activity: BrowserActivity,
+    app: HyperBrowserApp,
+    profileStore: BrowserProfileStore,
+    initialUrl: String,
+    initialDownloadUrl: String?,
+    initialShowDownloads: Boolean,
+    initialSelectTabId: String?,
+    externalIntents: MutableSharedFlow<ExternalBrowserIntent>
+) {
+    var pendingHyperRoute by remember { mutableStateOf<HyperRoute?>(null) }
+    var pendingHyperCommand by remember { mutableStateOf<HyperCommand?>(null) }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val clipboard = LocalClipboard.current
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    val imageCopiedText = stringResource(R.string.browser_toast_image_url_copied)
+    val linkCopiedText = stringResource(R.string.browser_toast_link_copied)
+    val faviconStore = remember { FaviconRepository(app) }
+    val backupManager = remember { BrowserBackupManager(profileStore, app.webApps) }
+    val webDavLocalSyncAdapter = remember { WebDavLocalSyncAdapter(profileStore, app.webApps) }
+    val downloadStore = remember { app.downloads }
+    val downloadHandler = remember { DownloadHandler(app, downloadStore) }
+    val updateManager = remember { AppUpdateManager(app, UpdateSettingsStore(app)) }
+    val scope = rememberCoroutineScope()
+    val thumbnailRefreshRequests = remember { MutableSharedFlow<String>(extraBufferCapacity = 16) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var checkedUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
+    var updateDownloadState by remember { mutableStateOf(UpdateDownloadState.idle()) }
+    var updateDownloadEntry by remember { mutableStateOf<BrowserDownloadEntry?>(null) }
+    var updateInstallInFlight by remember { mutableStateOf(false) }
+    var settingsUpdateMessage by remember { mutableStateOf<String?>(null) }
+    var pendingBackupImport by remember { mutableStateOf<PendingBackupImport?>(null) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
+    fun requestDownloadNotificationsIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !downloadHandler.canPostNotifications()) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    fun enqueueUrlDownload(url: String) {
+        requestDownloadNotificationsIfNeeded()
+        scope.launch {
+            message = context.getString(R.string.download_toast_downloading)
+            runCatching { downloadHandler.enqueueUrlDownload(url) }
+                .onSuccess { message = context.getString(R.string.download_toast_queued, it.name) }
+                .onFailure { message = it.message ?: context.getString(R.string.download_toast_failed) }
+        }
+    }
+    fun saveGeckoDownload(request: GeckoDownloadRequest) {
+        requestDownloadNotificationsIfNeeded()
+        scope.launch {
+            message = context.getString(R.string.download_toast_saving, request.fileName)
+            runCatching { downloadHandler.saveResponse(request, downloadHandler.canPostNotifications()) }
+                .onSuccess { message = context.getString(R.string.download_toast_queued, it.name) }
+                .onFailure { message = it.message ?: context.getString(R.string.download_toast_failed) }
+        }
+    }
+
+    fun canRetryDownload(entry: BrowserDownloadEntry): Boolean =
+        entry.id != AppUpdateManager.APP_UPDATE_DOWNLOAD_ID &&
+            (entry.status == DownloadStatus.Failed || entry.status == DownloadStatus.Canceled) &&
+            (entry.sourceUrl.startsWith("http://") || entry.sourceUrl.startsWith("https://"))
+
+    fun canCancelDownload(entry: BrowserDownloadEntry): Boolean =
+        entry.id != AppUpdateManager.APP_UPDATE_DOWNLOAD_ID &&
+            (entry.status == DownloadStatus.Queued || entry.status == DownloadStatus.Running)
+
+    fun canDeleteDownloadFile(entry: BrowserDownloadEntry): Boolean =
+        if (entry.id == AppUpdateManager.APP_UPDATE_DOWNLOAD_ID) {
+            entry.status == DownloadStatus.Completed
+        } else {
+            downloadHasSavedFile(entry)
+        }
+
+    fun canClearDownload(entry: BrowserDownloadEntry): Boolean =
+        entry.id != AppUpdateManager.APP_UPDATE_DOWNLOAD_ID
+
+    fun markWebDavDirty() {
+        HyperBridge.sendBackgroundCommand(context, "sync.soon")
+            .accept(
+                { },
+                { throwable -> Log.w(BROWSER_ACTIVITY_TAG, "Failed to schedule WebDAV sync", throwable) }
+            )
+    }
+
+    fun saveBookmarkThroughBackground(
+        url: String,
+        title: String,
+        onFailure: (() -> Unit)? = null
+    ) {
+        val cleanUrl = url.trim()
+        if (cleanUrl.isBlank()) return
+        val payload = JSONObject()
+            .put("title", title.ifBlank { cleanUrl })
+            .put("url", cleanUrl)
+        HyperBridge.sendBackgroundCommand(context, "bookmarks.save", payload)
+            .accept(
+                { },
+                { throwable ->
+                    Log.w(BROWSER_ACTIVITY_TAG, "Failed to save bookmark through background", throwable)
+                    onFailure?.invoke()
+                    message = throwable?.message ?: context.getString(R.string.bookmark_save_failed)
+                }
+            )
+    }
+
+    fun removeBookmarkThroughBackground(url: String, onFailure: (() -> Unit)? = null) {
+        val cleanUrl = url.trim()
+        if (cleanUrl.isBlank()) return
+        HyperBridge.sendBackgroundCommand(context, "bookmarks.delete", JSONObject().put("url", cleanUrl))
+            .accept(
+                { },
+                { throwable ->
+                    Log.w(BROWSER_ACTIVITY_TAG, "Failed to remove bookmark through background", throwable)
+                    onFailure?.invoke()
+                    message = throwable?.message ?: context.getString(R.string.bookmark_remove_failed)
+                }
+            )
+    }
+
+    fun removeBookmarkAndSync(url: String) {
+        removeBookmarkThroughBackground(url)
+    }
+
+    fun deleteWebAppThroughBackground(webApp: WebAppDefinition) {
+        val cleanId = webApp.id.trim()
+        if (cleanId.isBlank()) return
+        HyperBridge.sendBackgroundCommand(context, "webapps.delete", JSONObject().put("id", cleanId))
+            .accept(
+                { message = context.getString(R.string.webapp_uninstalled, webApp.name) },
+                { throwable ->
+                    Log.w(BROWSER_ACTIVITY_TAG, "Failed to delete WebApp through background", throwable)
+                    message = throwable?.message ?: context.getString(R.string.webapp_uninstall_failed)
+                }
+            )
+    }
+
+    fun installWebAppThroughBackground(
+        name: String,
+        startUrl: String,
+        iconPath: String?,
+        iconSource: String?,
+        requestShortcut: Boolean
+    ) {
+        val cleanUrl = startUrl.trim()
+        val cleanName = name.trim().ifBlank { cleanUrl }
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val payload = JSONObject()
+            .put("id", id)
+            .put("name", cleanName)
+            .put("startUrl", cleanUrl)
+        faviconStore.iconDataUrl(iconPath, cleanUrl)?.let { iconDataUrl ->
+            payload.put("iconDataUrl", iconDataUrl)
+            payload.put("iconSource", iconSource ?: "site")
+        }
+        HyperBridge.sendBackgroundCommand(context, "webapps.save", payload)
+            .accept(
+                {
+                    addWebAppToLauncherLayout(context, id, cleanName, cleanUrl)
+                    if (requestShortcut) {
+                        val shortcutResult = app.webApps.pinToHome(
+                            WebAppDefinition(
+                                id = id,
+                                name = cleanName,
+                                startUrl = cleanUrl,
+                                iconPath = iconPath,
+                                themeColor = 0xFF126D6A.toInt(),
+                                displayMode = "standalone",
+                                createdAt = now,
+                                lastOpenedAt = now
+                            )
+                        )
+                        message = context.getString(
+                            R.string.webapp_installed_with_shortcut,
+                            cleanName,
+                            shortcutRequestMessage(context, shortcutResult)
+                        )
+                    } else {
+                        message = context.getString(R.string.webapp_installed, cleanName)
+                    }
+                },
+                { throwable ->
+                    Log.w(BROWSER_ACTIVITY_TAG, "Failed to install WebApp through background", throwable)
+                    message = throwable?.message ?: context.getString(R.string.webapp_install_failed)
+                }
+            )
+    }
+
+    fun editBookmarkAndSync(oldUrl: String, title: String, url: String) {
+        val cleanUrl = url.trim()
+        if (cleanUrl.isBlank()) return
+        HyperBridge.sendBackgroundCommand(
+            context,
+            "bookmarks.save",
+            JSONObject()
+                .put("oldUrl", oldUrl)
+                .put("title", title.ifBlank { cleanUrl })
+                .put("url", cleanUrl)
+        )
+            .accept(
+                { },
+                { throwable ->
+                    Log.w(BROWSER_ACTIVITY_TAG, "Failed to edit bookmark through background", throwable)
+                    message = throwable?.message ?: context.getString(R.string.bookmark_save_failed)
+                }
+            )
+    }
+
+    fun retryDownload(entry: BrowserDownloadEntry) {
+        scope.launch {
+            message = context.getString(R.string.download_retrying, entry.name)
+            runCatching { downloadHandler.retry(entry) }
+                .onSuccess { message = context.getString(R.string.download_toast_queued, it.name) }
+                .onFailure { message = it.message ?: context.getString(R.string.download_retry_failed) }
+        }
+    }
+
+    fun cancelDownload(entry: BrowserDownloadEntry) {
+        scope.launch {
+            runCatching { downloadHandler.cancel(entry) }
+                .onSuccess { message = context.getString(R.string.download_canceled) }
+                .onFailure { message = it.message ?: context.getString(R.string.download_cancel_failed) }
+        }
+    }
+
+    fun clearFinishedDownloads() {
+        scope.launch {
+            runCatching { downloadHandler.clearFinishedRecords() }
+                .onSuccess { count ->
+                    message = if (count > 0) {
+                        context.getString(R.string.library_downloads_cleared_count, count)
+                    } else {
+                        context.getString(R.string.library_downloads_none_to_clear)
+                    }
+                }
+                .onFailure { message = it.message ?: context.getString(R.string.library_downloads_clear_failed) }
+        }
+    }
+
+    fun beginUpdateInstall(update: AvailableUpdate): UpdateDownloadState {
+        if (updateInstallInFlight && updateDownloadState.versionCode == update.versionCode) {
+            return updateDownloadState
+        }
+
+        if (!updateManager.canInstallPackages()) {
+            updateDownloadState = UpdateDownloadState(
+                status = UpdateDownloadState.STATUS_PERMISSION_REQUIRED,
+                versionCode = update.versionCode,
+                versionName = update.versionName,
+                totalBytes = update.asset.sizeBytes,
+                message = context.getString(R.string.browser_install_unknown_apps_required)
+            )
+            message = updateDownloadState.message
+            runCatching { activity.startActivity(updateManager.installPermissionIntent()) }
+                .onFailure { message = it.message ?: context.getString(R.string.browser_open_install_permission_failed) }
+            return updateDownloadState
+        }
+
+        updateInstallInFlight = true
+        updateDownloadState = UpdateDownloadState(
+            status = UpdateDownloadState.STATUS_PREPARING,
+            versionCode = update.versionCode,
+            versionName = update.versionName,
+            totalBytes = update.asset.sizeBytes,
+            message = context.getString(R.string.update_preparing)
+        )
+        requestDownloadNotificationsIfNeeded()
+        message = context.getString(R.string.update_started_version, update.versionName)
+
+        activity.lifecycleScope.launch {
+            runCatching {
+                updateManager.startOrResumeDownload(update)
+            }
+                .onSuccess { state ->
+                    updateDownloadState = state
+                    if (state.status == UpdateDownloadState.STATUS_READY) {
+                        message = state.message
+                        runCatching { updateManager.createInstallIntentIfReady(update) }
+                            .onSuccess { intent ->
+                                if (intent != null) {
+                                    runCatching { activity.startActivity(intent) }
+                                        .onFailure { message = it.message ?: context.getString(R.string.browser_open_installer_failed) }
+                                }
+                            }
+                            .onFailure { message = it.message ?: context.getString(R.string.browser_open_installer_failed) }
+                    }
+                }
+                .onFailure { throwable ->
+                    val error = throwable.message ?: context.getString(R.string.update_download_failed)
+                    updateDownloadState = UpdateDownloadState(
+                        status = UpdateDownloadState.STATUS_ERROR,
+                        versionCode = update.versionCode,
+                        versionName = update.versionName,
+                        totalBytes = update.asset.sizeBytes,
+                        message = error
+                    )
+                    updateManager.notifyUpdateError(update, error)
+                    message = error
+                }
+            updateInstallInFlight = false
+        }
+
+        return updateDownloadState
+    }
+
+    fun isIgnoringBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val powerManager = context.getSystemService(PowerManager::class.java) ?: return false
+        return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    fun openBatteryOptimizationSettings(): Boolean {
+        val packageUri = Uri.parse("package:${context.packageName}")
+        val intents = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !isIgnoringBatteryOptimizations()) {
+                add(
+                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                        .setData(packageUri)
+                )
+            }
+            add(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(packageUri)
+            )
+        }
+        for (intent in intents) {
+            val launchIntent = intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (launchIntent.resolveActivity(context.packageManager) == null) continue
+            runCatching {
+                activity.startActivity(launchIntent)
+            }.onSuccess {
+                return true
+            }
+        }
+        return false
+    }
+
+    fun defaultBackupFileName(): String =
+        "hyper-browser-backup-${System.currentTimeMillis()}.json"
+
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) {
+            message = context.getString(R.string.backup_export_canceled)
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            message = context.getString(R.string.backup_exporting)
+            runCatching {
+                val backupJson = withContext(Dispatchers.IO) { backupManager.exportJson() }
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)
+                        ?.bufferedWriter(Charsets.UTF_8)
+                        ?.use { writer -> writer.write(backupJson) }
+                        ?: error(context.getString(R.string.backup_write_failed))
+                }
+            }
+                .onSuccess { message = context.getString(R.string.backup_export_success) }
+                .onFailure { message = it.message ?: context.getString(R.string.backup_export_failed) }
+        }
+    }
+
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) {
+            message = context.getString(R.string.backup_import_canceled)
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            message = null
+            runCatching {
+                val backupJson = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)
+                        ?.bufferedReader(Charsets.UTF_8)
+                        ?.use { reader -> reader.readText() }
+                        ?: error(context.getString(R.string.backup_read_failed))
+                }
+                val preview = withContext(Dispatchers.IO) { previewBrowserBackupImport(backupJson) }
+                PendingBackupImport(backupJson, preview)
+            }
+                .onSuccess { pending ->
+                    pendingBackupImport = pending
+                    message = null
+                }
+                .onFailure { message = it.message ?: context.getString(R.string.backup_import_failed) }
+        }
+    }
+
+    fun confirmBackupImport(pending: PendingBackupImport) {
+        pendingBackupImport = null
+        scope.launch {
+            message = context.getString(R.string.backup_importing)
+            runCatching {
+                withContext(Dispatchers.IO) { backupManager.importJson(pending.rawJson) }
+            }
+                .onSuccess { result ->
+                    message = context.getString(R.string.backup_import_result, result.bookmarks, result.webApps)
+                }
+                .onFailure { message = it.message ?: context.getString(R.string.backup_import_failed) }
+        }
+    }
+
+    fun bridgeResult(response: JSONObject): GeckoResult<Any> =
+        GeckoResult.fromValue(response.toString())
+
+    fun bridgeError(error: String): GeckoResult<Any> =
+        bridgeResult(JSONObject().put("ok", false).put("error", error))
+
+    fun completeBridgeResult(result: GeckoResult<Any>?, response: JSONObject) {
+        result?.complete(response.toString())
+    }
+
+    fun webAppsItemsResponse(): JSONObject =
+        okItems(app.webApps.observeAll().value.toWebAppsJsonString(app))
+
+    fun bookmarksItemsResponse(): JSONObject =
+        okItems(profileStore.observeBookmarks().value.toBookmarksJsonString(faviconStore))
+
+    var pendingWebAppIconPickResult by remember { mutableStateOf<GeckoResult<Any>?>(null) }
+    var pendingWebAppIconPickKey by remember { mutableStateOf<String?>(null) }
+    val webAppIconBridgeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        val result = pendingWebAppIconPickResult ?: return@rememberLauncherForActivityResult
+        val key = pendingWebAppIconPickKey
+        pendingWebAppIconPickResult = null
+        pendingWebAppIconPickKey = null
+        if (uri == null) {
+            completeBridgeResult(result, okData(JSONObject().put("iconDataUrl", JSONObject.NULL)))
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            runCatching {
+                val iconPath = faviconStore.saveCustomIconFromUri(key ?: uri.toString(), uri)
+                    ?: error(context.getString(R.string.webapp_icon_choose_failed))
+                val iconDataUrl = faviconStore.iconDataUrl(iconPath)
+                    ?: error(context.getString(R.string.webapp_icon_choose_failed))
+                okData(JSONObject().put("iconDataUrl", iconDataUrl))
+            }.fold(
+                onSuccess = { response ->
+                    completeBridgeResult(result, response)
+                },
+                onFailure = { throwable ->
+                    completeBridgeResult(
+                        result,
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", throwable.message ?: context.getString(R.string.webapp_icon_choose_failed))
+                    )
+                }
+            )
+        }
+    }
+
+    fun handleHyperBridgeMessage(bridgeMessage: JSONObject): GeckoResult<Any> {
+        val payload = bridgeMessage.optJSONObject("payload") ?: JSONObject()
+        val response = when (bridgeMessage.optString("type")) {
+            "data.home" -> okItems(profileStore.observeHistory().value.toHistoryJsonString(faviconStore))
+            "data.bookmarks" -> okItems(profileStore.observeBookmarks().value.toBookmarksJsonString(faviconStore))
+            "data.history" -> okItems(profileStore.observeHistory().value.toHistoryJsonString(faviconStore))
+            "data.apps" -> okItems(app.webApps.observeAll().value.toWebAppsJsonString(app))
+            "data.settings" -> okData(profileStore.observeSettings().value.toJson())
+            "data.launcherLayout" -> okData(
+                JSONObject().put("layout", profileStore.loadLauncherLayout() ?: JSONObject.NULL)
+            )
+            "settings.searchEngine.update" -> {
+                profileStore.updateSearchEngine(
+                    searchEngineId = payload.optString("searchEngineId"),
+                    customSearchUrl = payload.optString("customSearchUrl")
+                )
+                okData(profileStore.observeSettings().value.toJson())
+            }
+            "settings.toolbarPosition.update" -> {
+                profileStore.updateToolbarPosition(payload.optString("toolbarPosition"))
+                okData(profileStore.observeSettings().value.toJson())
+            }
+            "settings.websiteDisplayMode.update" -> {
+                profileStore.updateWebsiteDisplayMode(payload.optString("websiteDisplayMode"))
+                okData(profileStore.observeSettings().value.toJson())
+            }
+            "settings.backgroundVideoEnhancement.update" -> {
+                profileStore.updateBackgroundVideoEnhancement(payload.optString("enabled") == "true")
+                okData(profileStore.observeSettings().value.toJson())
+            }
+            "settings.openNewTabsInCurrentTab.update" -> {
+                profileStore.updateOpenNewTabsInCurrentTab(payload.optString("enabled") == "true")
+                okData(profileStore.observeSettings().value.toJson())
+            }
+            "settings.locale.update" -> {
+                val previousLocalePreference = profileStore.observeSettings().value.localePreference
+                profileStore.updateLocalePreference(payload.optString("localePreference"))
+                val nextSettings = profileStore.observeSettings().value
+                if (nextSettings.localePreference != previousLocalePreference) {
+                    activity.window.decorView.post { activity.recreate() }
+                }
+                okData(nextSettings.toJson())
+            }
+            "settings.privacy.update" -> {
+                profileStore.updatePrivacySettings(
+                    dohEnabled = payload.optString("dohEnabled") == "true",
+                    dohProviderUrl = payload.optString("dohProviderUrl"),
+                    httpsOnlyEnabled = payload.optString("httpsOnlyEnabled") == "true",
+                    privacyProtectionLevel = payload.optString("privacyProtectionLevel")
+                )
+                val nextSettings = profileStore.observeSettings().value
+                GeckoRuntimeProvider.applyBrowserSettings(app, nextSettings)
+                okData(nextSettings.toJson())
+            }
+            "settings.batteryOptimizationState" -> okData(
+                JSONObject().put("ignoringBatteryOptimizations", isIgnoringBatteryOptimizations())
+            )
+            "settings.openBatteryOptimization" -> okData(
+                JSONObject()
+                    .put("opened", openBatteryOptimizationSettings())
+                    .put("ignoringBatteryOptimizations", isIgnoringBatteryOptimizations())
+            )
+            "sync.webdav.update" -> {
+                val nextSettings = profileStore.updateWebDavSyncSettings(
+                    enabled = payload.optString("enabled") == "true",
+                    url = payload.optString("url"),
+                    username = payload.optString("username"),
+                    password = payload.optString("password"),
+                    deviceName = payload.optString("deviceName")
+                )
+                okData(nextSettings.toJson())
+            }
+            "sync.localFile.read" -> {
+                if (payload.optString("syncClientVersion") != WEB_DAV_SYNC_CLIENT_VERSION) {
+                    return bridgeError("Unsupported WebDAV sync client. Restart Hyper Browser and try again.")
+                }
+                val path = payload.optString("path").trim()
+                runCatching {
+                    webDavLocalSyncAdapter.readSyncFile(path)
+                }.fold(
+                    onSuccess = { content ->
+                        okData(
+                            JSONObject()
+                                .put("path", path)
+                                .put("content", content?.toString() ?: JSONObject.NULL)
+                        )
+                    },
+                    onFailure = { throwable ->
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", throwable.message ?: context.getString(R.string.webdav_sync_failed))
+                    }
+                )
+            }
+            "sync.localFile.save" -> {
+                if (payload.optString("syncClientVersion") != WEB_DAV_SYNC_CLIENT_VERSION) {
+                    return bridgeError("Unsupported WebDAV sync client. Restart Hyper Browser and try again.")
+                }
+                val result = GeckoResult<Any>()
+                val path = payload.optString("path").trim()
+                val content = payload.optString("content")
+                scope.launch {
+                    val response = runCatching {
+                        webDavLocalSyncAdapter.saveSyncFile(path, content)
+                    }.fold(
+                        onSuccess = { ok() },
+                        onFailure = { throwable ->
+                            JSONObject()
+                                .put("ok", false)
+                                .put("error", throwable.message ?: context.getString(R.string.webdav_sync_failed))
+                        }
+                    )
+                    completeBridgeResult(result, response)
+                }
+                return result
+            }
+            "backup.export" -> {
+                scope.launch { exportBackupLauncher.launch(defaultBackupFileName()) }
+                okData(JSONObject().put("message", context.getString(R.string.backup_choose_save_location)))
+            }
+            "backup.import" -> {
+                scope.launch {
+                    importBackupLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream", "*/*"))
+                }
+                okData(JSONObject().put("message", context.getString(R.string.backup_choose_file)))
+            }
+            "update.check" -> {
+                val result = runBlocking {
+                    updateManager.check(ignoreSkipped = payload.optString("ignoreSkipped") == "true")
+                }
+                checkedUpdate = result.update
+                okData(result.toJson())
+            }
+            "update.skip" -> {
+                updateManager.skip(payload.optString("versionCode").toLongOrNull() ?: 0L)
+                ok()
+            }
+            "update.clearSkip" -> {
+                updateManager.clearSkip()
+                ok()
+            }
+            "update.downloadState" -> {
+                val state = runBlocking { updateManager.refreshDownloadState() }
+                updateDownloadState = state
+                okData(state.toJson())
+            }
+            "update.install" -> {
+                val versionCode = payload.optString("versionCode").toLongOrNull() ?: 0L
+                val update = checkedUpdate
+                if (update == null || update.versionCode != versionCode) {
+                    JSONObject().put("ok", false).put("error", context.getString(R.string.update_check_first))
+                } else {
+                    okData(beginUpdateInstall(update).toJson())
+                }
+            }
+            "bookmarks.open" -> {
+                pendingHyperCommand = HyperCommand.Bookmarks.Open(payload.optString("url"))
+                ok()
+            }
+            "history.open" -> {
+                pendingHyperCommand = HyperCommand.History.Open(payload.optString("url"))
+                ok()
+            }
+            "history.remove" -> {
+                pendingHyperCommand = HyperCommand.History.Remove(payload.optString("url"))
+                ok()
+            }
+            "history.clear" -> {
+                pendingHyperCommand = HyperCommand.History.Clear
+                ok()
+            }
+            "apps.open" -> {
+                pendingHyperCommand = HyperCommand.Apps.Open(payload.optString("id"))
+                ok()
+            }
+            "apps.openStandalone" -> {
+                pendingHyperCommand = HyperCommand.Apps.OpenStandalone(payload.optString("id"))
+                ok()
+            }
+            "apps.pin" -> {
+                pendingHyperCommand = HyperCommand.Apps.Pin(payload.optString("id"))
+                ok()
+            }
+            "apps.icon.choose" -> {
+                val id = payload.optString("id")
+                if (id.isBlank()) return bridgeError(context.getString(R.string.webapp_not_found))
+                val webApp = app.webApps.observeAll().value.firstOrNull { it.id == id }
+                    ?: return bridgeError(context.getString(R.string.webapp_not_found))
+                if (pendingWebAppIconPickResult != null) {
+                    return bridgeError(context.getString(R.string.webapp_icon_choose_failed))
+                }
+                val result = GeckoResult<Any>()
+                pendingWebAppIconPickResult = result
+                pendingWebAppIconPickKey = webApp.id.ifBlank { webApp.startUrl }
+                scope.launch { webAppIconBridgeLauncher.launch("image/*") }
+                return result
+            }
+            "panel.extensions" -> {
+                pendingHyperCommand = HyperCommand.Panel.Extensions
+                ok()
+            }
+            else -> JSONObject().put("ok", false).put("error", "Unknown bridge message.")
+        }
+        return bridgeResult(response)
+    }
+    var pageContextMenu by remember { mutableStateOf<GeckoContextMenuTarget?>(null) }
+    var authPrompt by remember { mutableStateOf<GeckoAuthPromptRequest?>(null) }
+    var geckoPrompt by remember { mutableStateOf<GeckoPromptRequest?>(null) }
+    var pendingFilePrompt by remember { mutableStateOf<GeckoFilePromptRequest?>(null) }
+    val singleFilePromptLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        val request = pendingFilePrompt ?: return@rememberLauncherForActivityResult
+        pendingFilePrompt = null
+        if (uri == null) {
+            request.dismiss()
+        } else {
+            request.confirm(listOf(uri))
+        }
+    }
+    val multipleFilePromptLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        val request = pendingFilePrompt ?: return@rememberLauncherForActivityResult
+        pendingFilePrompt = null
+        if (uris.isEmpty()) {
+            request.dismiss()
+        } else {
+            request.confirm(uris)
+        }
+    }
+    fun handleFilePrompt(request: GeckoFilePromptRequest) {
+        pendingFilePrompt?.dismiss()
+        pendingFilePrompt = request
+        if (request.multiple) {
+            multipleFilePromptLauncher.launch(request.pickerMimeTypes())
+        } else {
+            singleFilePromptLauncher.launch(request.pickerMimeTypes())
+        }
+    }
+    fun handleCertificatePrompt(request: GeckoCertificatePromptRequest) {
+        val activity = context as? BrowserActivity
+        if (activity == null) {
+            request.dismiss()
+            return
+        }
+        KeyChain.choosePrivateKeyAlias(
+            activity,
+            { alias ->
+                if (alias == null) {
+                    request.dismiss()
+                } else {
+                    request.confirm(alias)
+                }
+            },
+            null,
+            request.issuers,
+            request.host.takeIf { it.isNotBlank() },
+            -1,
+            null
+        )
+    }
+    fun handleSharePrompt(request: GeckoSharePromptRequest) {
+        val shareText = listOf(request.text, request.uri)
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
+        if (shareText.isBlank()) {
+            request.dismiss()
+            return
+        }
+        val sendIntent = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, shareText)
+        request.title.takeIf { it.isNotBlank() }?.let {
+            sendIntent.putExtra(Intent.EXTRA_TITLE, it)
+        }
+        runCatching {
+            activity.startActivity(
+                Intent.createChooser(sendIntent, context.getString(R.string.prompt_share_title))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.onSuccess {
+            request.confirm(GeckoSession.PromptDelegate.SharePrompt.Result.SUCCESS)
+        }.onFailure {
+            request.confirm(GeckoSession.PromptDelegate.SharePrompt.Result.FAILURE)
+        }
+    }
+    fun refreshTabThumbnail(
+        tab: BrowserTabRuntime,
+        shouldApply: () -> Boolean = { true },
+        onFinished: () -> Unit = {}
+    ) {
+        tab.capturePixels { bitmap ->
+            if (bitmap != null && shouldApply()) {
+                tab.thumbnail = bitmap
+                scope.launch(Dispatchers.IO) {
+                    profileStore.saveTabThumbnail(tab.id, bitmap)
+                }
+            }
+            onFinished()
+        }
+    }
+
+    fun loadValidatedSessionState(tabId: String?, url: String): GeckoSession.SessionState? {
+        if (tabId == null || !shouldPersistEngineSessionStateUri(url)) return null
+        val rawState = profileStore.loadTabSessionState(tabId) ?: return null
+        val state = runCatching { GeckoSession.SessionState.fromString(rawState) }
+            .getOrNull()
+            ?: run {
+                profileStore.deleteTabSessionState(tabId)
+                return null
+            }
+        if (currentUriForEngineSessionState(state) != url) {
+            profileStore.deleteTabSessionState(tabId)
+            return null
+        }
+        return state
+    }
+
+    var openNewSessionAsTab: ((String, String?) -> GeckoSession?)? = null
+    var closeTabById: ((String) -> Unit)? = null
+    var focusTabById: ((String) -> Unit)? = null
+
+    fun createBrowserTab(
+        url: String,
+        id: String? = null,
+        input: String = url,
+        title: String? = null,
+        iconPath: String? = null,
+        loadImmediately: Boolean = true,
+        openerTabId: String? = null
+    ): BrowserTabRuntime {
+        val tabId = id ?: UUID.randomUUID().toString()
+        val restoredSessionState = loadValidatedSessionState(id, url)
+        val restoredThumbnail = id?.let { profileStore.loadTabThumbnail(it) }
+        return BrowserTabRuntime.create(
+            app = app,
+            url = url,
+            id = tabId,
+            openerTabId = openerTabId,
+            initialInput = input,
+            initialTitle = title,
+            initialIconPath = iconPath,
+            loadImmediately = loadImmediately,
+            restoredSessionState = restoredSessionState,
+            onHyperRoute = { pendingHyperRoute = it },
+            onHyperBridgeMessage = ::handleHyperBridgeMessage,
+            onPageContextMenu = { pageContextMenu = it },
+            onAuthPrompt = { authPrompt = it },
+            onPrompt = { geckoPrompt = it },
+            onFilePrompt = ::handleFilePrompt,
+            onCertificatePrompt = ::handleCertificatePrompt,
+            onSharePrompt = ::handleSharePrompt,
+            onDownload = ::saveGeckoDownload,
+            openNewTabsInCurrentTab = { profileStore.observeSettings().value.openNewTabsInCurrentTab },
+            onNewSession = { uri -> openNewSessionAsTab?.invoke(uri, tabId) },
+            onCloseRequest = { closeTabById?.invoke(tabId) },
+            onFocusRequest = { focusTabById?.invoke(tabId) },
+            onEngineSessionStateChange = { state ->
+                state?.let { profileStore.saveTabSessionState(tabId, it) }
+            },
+            defaultWebsiteDisplayMode = { profileStore.observeSettings().value.websiteDisplayMode },
+            onPageStop = { success ->
+                if (success) {
+                    thumbnailRefreshRequests.tryEmit(tabId)
+                }
+            }
+        ).also { tab ->
+            restoredThumbnail?.let { tab.thumbnail = it }
+        }
+    }
+
+    val launchUrl = remember(initialUrl, initialDownloadUrl, initialShowDownloads) {
+        initialUrl.takeIf {
+            it != GeckoSessionController.HOME_URL && initialDownloadUrl == null && !initialShowDownloads
+        }
+    }
+    val restorePlan = remember(launchUrl) {
+        planBrowserTabRestore(
+            savedTabs = profileStore.loadSavedTabs(),
+            launchUrl = launchUrl,
+            fallbackUrl = GeckoSessionController.HOME_URL
+        )
+    }
+    val tabs = remember {
+        val initialTabs = restorePlan.tabs.map { tab ->
+            createBrowserTab(
+                url = tab.url,
+                id = tab.id,
+                input = tab.input,
+                title = tab.title,
+                iconPath = tab.iconPath,
+                loadImmediately = tab.loadImmediately
+            )
+        }
+        mutableStateListOf(*initialTabs.toTypedArray())
+    }
+    var selectedTabId by remember {
+        mutableStateOf(
+            when {
+                initialSelectTabId != null && tabs.any { it.id == initialSelectTabId } -> initialSelectTabId
+                restorePlan.selectLastTab -> tabs.last().id
+                restorePlan.selectedSavedTabId != null -> restorePlan.selectedSavedTabId
+                else -> tabs.first().id
+            }
+        )
+    }
+    var pendingSwipeClosedTab by remember { mutableStateOf<PendingSwipeClosedTab?>(null) }
+    var activePanel by remember {
+        mutableStateOf(if (initialShowDownloads) BrowserPanel.Downloads else BrowserPanel.None)
+    }
+    var tabTrayMode by remember { mutableStateOf(TabTrayMode.Card) }
+    val showSearch = activePanel == BrowserPanel.Search
+    val showSettings = activePanel == BrowserPanel.Settings
+    val showBookmarks = activePanel == BrowserPanel.Bookmarks
+    val showHistory = activePanel == BrowserPanel.History
+    val showDownloads = activePanel == BrowserPanel.Downloads
+    val showExtensions = activePanel == BrowserPanel.Extensions
+    val showTabs = activePanel == BrowserPanel.Tabs
+    val selectedIndex = tabs.indexOfFirst { it.id == selectedTabId }.takeIf { it >= 0 } ?: 0
+    val tab = tabs.getOrNull(selectedIndex) ?: tabs.first()
+    val currentSelectedTabId = rememberUpdatedState(selectedTabId)
+    val controller = tab.ensureController()
+    val pageState by controller.state.collectAsState()
+    val pageFullScreen by controller.fullScreen.collectAsState()
+    val readerModeActive by controller.readerModeActive.collectAsState()
+    val history by profileStore.observeHistory().collectAsState()
+    val bookmarks by profileStore.observeBookmarks().collectAsState()
+    val downloads by downloadStore.observeDownloads().collectAsState()
+    val settings by profileStore.observeSettings().collectAsState()
+    val webApps by app.webApps.observeAll().collectAsState()
+    val installedExtensions by app.extensions.observeInstalled().collectAsState()
+    val extensionActions by app.extensions.observeMenuActions().collectAsState()
+    val extensionPopup by app.extensions.observePopup().collectAsState()
+    var extensionQuery by remember { mutableStateOf("ublock") }
+    var extensionResults by remember { mutableStateOf<List<AmoAddonListing>>(emptyList()) }
+    var extensionMessage by remember { mutableStateOf<String?>(null) }
+    var installingAddonGuid by remember { mutableStateOf<String?>(null) }
+    var currentIconPath by remember { mutableStateOf<String?>(null) }
+    var webAppDetailsDialog by remember { mutableStateOf<WebAppDetailsDialogState?>(null) }
+    var pendingWebAppUninstall by remember { mutableStateOf<WebAppDefinition?>(null) }
+    var findInPageVisible by remember { mutableStateOf(false) }
+    var findInPageState by remember { mutableStateOf(FindInPageUiState()) }
+    var findInPageRequestId by remember { mutableStateOf(0) }
+    val webAppIconImageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        val dialog = webAppDetailsDialog ?: return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val key = dialog.webAppId ?: dialog.startUrl
+            val iconPath = runCatching { faviconStore.saveCustomIconFromUri(key, uri) }.getOrNull()
+            if (iconPath == null) {
+                message = context.getString(R.string.webapp_icon_choose_failed)
+            } else {
+                webAppDetailsDialog = dialog.copy(selectedIcon = WebAppIconSelection.Image(iconPath))
+            }
+        }
+    }
+    var optimisticBookmarkState by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var toolbarCollapseFraction by remember { mutableFloatStateOf(0f) }
+    val toolbarCollapseRangePx = with(density) { ToolbarAutoHideDragRange.toPx() }
+    val canAutoCollapseToolbar = !pageFullScreen &&
+        activePanel == BrowserPanel.None &&
+        !findInPageVisible &&
+        BrowserSettings.isDynamicBottomToolbarPosition(settings.toolbarPosition)
+    val animatedToolbarCollapseFraction by animateFloatAsState(
+        targetValue = toolbarCollapseFraction,
+        label = "toolbar-collapse"
+    )
+
+    fun updateToolbarCollapse(deltaY: Float) {
+        if (!canAutoCollapseToolbar) {
+            toolbarCollapseFraction = 0f
+            return
+        }
+        toolbarCollapseFraction = (toolbarCollapseFraction + deltaY / toolbarCollapseRangePx)
+            .coerceIn(0f, 1f)
+    }
+
+    fun handlePageContentTouchStarted() {
+        focusManager.clearFocus(force = true)
+    }
+
+    fun handlePageContentScrollDelta(deltaY: Float) {
+        updateToolbarCollapse(deltaY)
+    }
+
+    fun closeFindInPage() {
+        findInPageRequestId += 1
+        controller.clearFindInPage()
+        findInPageVisible = false
+        findInPageState = FindInPageUiState()
+        focusManager.clearFocus(force = true)
+    }
+
+    fun findInPage(searchString: String?, backwards: Boolean = false) {
+        val query = searchString ?: findInPageState.query
+        if (query.isBlank()) {
+            findInPageRequestId += 1
+            controller.clearFindInPage()
+            findInPageState = FindInPageUiState(query = query)
+            return
+        }
+        findInPageRequestId += 1
+        val requestId = findInPageRequestId
+        findInPageState = findInPageState.copy(
+            query = query,
+            found = false,
+            current = 0,
+            total = 0,
+            searching = true
+        )
+        controller.findInPage(
+            searchString = searchString,
+            backwards = backwards,
+            onResult = { result ->
+                if (findInPageVisible && requestId == findInPageRequestId) {
+                    findInPageState = FindInPageUiState(
+                        query = query,
+                        found = result.found,
+                        current = result.current,
+                        total = result.total,
+                        searching = false
+                    )
+                }
+            },
+            onFailure = {
+                if (findInPageVisible && requestId == findInPageRequestId) {
+                    findInPageState = FindInPageUiState(query = query)
+                }
+            }
+        )
+    }
+
+    fun openWebAppInCurrentTab(webAppId: String, closeCurrentPanel: Boolean = false) {
+        val webApp = webApps.firstOrNull { it.id == webAppId }
+        if (webApp == null) {
+            message = context.getString(R.string.webapp_not_found)
+            return
+        }
+        tab.input = webApp.startUrl
+        controller.load(webApp.startUrl)
+        if (closeCurrentPanel) activePanel = BrowserPanel.None
+        message = null
+    }
+
+    fun showInstallWebAppDetailsDialog(name: String, startUrl: String, siteIconPath: String?) {
+        val usableSiteIconPath = faviconStore.existingIconPath(siteIconPath)
+        webAppDetailsDialog = WebAppDetailsDialogState(
+            name = name,
+            startUrl = startUrl,
+            siteIconPath = usableSiteIconPath,
+            selectedIcon = WebAppIconSelection.Site
+        )
+    }
+
+    fun dismissWebAppDetailsDialog() {
+        webAppDetailsDialog = null
+    }
+
+    suspend fun selectedIconPath(dialog: WebAppDetailsDialogState, key: String): String? =
+        when (val selection = dialog.selectedIcon) {
+            WebAppIconSelection.Site -> dialog.siteIconPath
+            is WebAppIconSelection.Image -> selection.iconPath
+            is WebAppIconSelection.Preset -> WebAppIconPresets.find(selection.id)
+                ?.let { preset ->
+                    withContext(Dispatchers.IO) {
+                        faviconStore.saveCustomIconPreset(dialog.webAppId ?: key, preset)
+                    }
+                }
+        }
+
+    fun confirmWebAppDetailsDialog(dialog: WebAppDetailsDialogState, action: WebAppInstallAction) {
+        webAppDetailsDialog = null
+        scope.launch {
+            runCatching {
+                val cleanUrl = normalizeWebAppUrl(dialog.startUrl)
+                    ?: error(context.getString(R.string.webapp_update_failed))
+                val cleanName = cleanWebAppName(context, dialog.name, cleanUrl)
+                val iconPath = selectedIconPath(dialog, cleanUrl)
+                if (dialog.selectedIcon != WebAppIconSelection.Site && iconPath == null) {
+                    error(context.getString(R.string.webapp_icon_update_failed))
+                }
+                val iconSource = when (dialog.selectedIcon) {
+                    WebAppIconSelection.Site -> "site"
+                    else -> "custom"
+                }
+                installWebAppThroughBackground(
+                    cleanName,
+                    cleanUrl,
+                    iconPath,
+                    iconSource,
+                    requestShortcut = action == WebAppInstallAction.InstallAndPin
+                )
+            }
+                .onFailure { message = it.message ?: context.getString(R.string.webapp_install_failed) }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { app.extensions.refreshInstalledFromRuntime() }
+    }
+
+    fun showPanel(panel: BrowserPanel) {
+        if (findInPageVisible) closeFindInPage()
+        activePanel = panel
+    }
+
+    fun openLinkInBackgroundTab(url: String) {
+        tabs.add(createBrowserTab(url, openerTabId = selectedTabId))
+        pageContextMenu = null
+        activePanel = BrowserPanel.None
+        message = context.getString(R.string.browser_opened_background_tab)
+    }
+
+    fun isActiveUpdateDownload(state: UpdateDownloadState): Boolean =
+        state.status == UpdateDownloadState.STATUS_PREPARING ||
+            state.status == UpdateDownloadState.STATUS_DOWNLOADING ||
+            state.status == UpdateDownloadState.STATUS_VERIFYING
+
+    fun persistBrowserTabs(selectedId: String = selectedTabId) {
+        profileStore.saveTabs(
+            SavedBrowserTabs(
+                selectedTabId = selectedId,
+                tabs = tabs.mapNotNull { it.toSavedTab() }.take(50)
+            )
+        )
+        val keptTabIds = buildSet {
+            tabs.forEach { add(it.id) }
+            pendingSwipeClosedTab?.let { add(it.tab.id) }
+        }
+        profileStore.pruneTabSessionStates(keptTabIds)
+        profileStore.pruneTabThumbnails(keptTabIds)
+    }
+
+    fun finalizePendingSwipeClose(expectedToken: UUID? = null) {
+        val pending = pendingSwipeClosedTab ?: return
+        if (
+            expectedToken != null &&
+            !isCurrentPendingSwipeClose(expectedToken, pending.requestToken)
+        ) {
+            return
+        }
+        pendingSwipeClosedTab = null
+        pending.tab.close()
+        profileStore.deleteTabSessionState(pending.tab.id)
+        profileStore.deleteTabThumbnail(pending.tab.id)
+    }
+
+    fun closePanel() {
+        finalizePendingSwipeClose()
+        activePanel = BrowserPanel.None
+    }
+
+    fun closeBrowserTabById(id: String, closePanelAfterClose: Boolean = true) {
+        finalizePendingSwipeClose()
+        val closing = tabs.firstOrNull { it.id == id } ?: return
+        val oldIndex = tabs.indexOf(closing)
+        closing.close()
+        profileStore.deleteTabSessionState(closing.id)
+        profileStore.deleteTabThumbnail(closing.id)
+        tabs.remove(closing)
+        if (tabs.isEmpty()) {
+            val replacement = createBrowserTab(GeckoSessionController.HOME_URL)
+            tabs.add(replacement)
+            selectedTabId = replacement.id
+        } else if (selectedTabId == id) {
+            selectedTabId = closing.openerTabId
+                ?.takeIf { openerId -> tabs.any { it.id == openerId } }
+                ?: tabs[(oldIndex - 1).coerceIn(0, tabs.lastIndex)].id
+        }
+        if (closePanelAfterClose) {
+            activePanel = BrowserPanel.None
+        }
+        message = null
+        persistBrowserTabs()
+    }
+
+    fun stageBrowserTabCloseAfterSwipe(id: String) {
+        finalizePendingSwipeClose()
+        val closing = tabs.firstOrNull { it.id == id } ?: return
+        val oldIndex = tabs.indexOf(closing)
+        val selectedTabIdBeforeClose = selectedTabId
+        closing.flushSessionState()
+        closing.controller?.setVisible(visible = false, focused = false)
+        tabs.remove(closing)
+        var temporaryReplacementTabId: String? = null
+        if (tabs.isEmpty()) {
+            val replacement = createBrowserTab(GeckoSessionController.HOME_URL)
+            tabs.add(replacement)
+            selectedTabId = replacement.id
+            temporaryReplacementTabId = replacement.id
+        } else if (selectedTabId == id) {
+            selectedTabId = closing.openerTabId
+                ?.takeIf { openerId -> tabs.any { it.id == openerId } }
+                ?: tabs[(oldIndex - 1).coerceIn(0, tabs.lastIndex)].id
+        }
+        pendingSwipeClosedTab = PendingSwipeClosedTab(
+            tab = closing,
+            originalIndex = oldIndex,
+            selectedTabIdBeforeClose = selectedTabIdBeforeClose,
+            temporaryReplacementTabId = temporaryReplacementTabId,
+            requestToken = UUID.randomUUID()
+        )
+        message = null
+        persistBrowserTabs()
+    }
+
+    fun undoPendingSwipeClose() {
+        val pending = pendingSwipeClosedTab ?: return
+        pendingSwipeClosedTab = null
+        pending.temporaryReplacementTabId?.let { replacementId ->
+            tabs.firstOrNull { it.id == replacementId }?.let { replacement ->
+                tabs.remove(replacement)
+                replacement.close()
+                profileStore.deleteTabSessionState(replacement.id)
+                profileStore.deleteTabThumbnail(replacement.id)
+            }
+        }
+        tabs.add(pending.originalIndex.coerceIn(0, tabs.size), pending.tab)
+        selectedTabId = pending.selectedTabIdBeforeClose
+            .takeIf { previousId -> tabs.any { it.id == previousId } }
+            ?: pending.tab.id
+        persistBrowserTabs()
+    }
+
+    fun closeAllBrowserTabs() {
+        finalizePendingSwipeClose()
+        val closingTabs = tabs.toList()
+        closingTabs.forEach { closing ->
+            closing.close()
+            profileStore.deleteTabSessionState(closing.id)
+            profileStore.deleteTabThumbnail(closing.id)
+        }
+        tabs.clear()
+        val replacement = createBrowserTab(GeckoSessionController.HOME_URL)
+        tabs.add(replacement)
+        selectedTabId = replacement.id
+        activePanel = BrowserPanel.None
+        message = null
+        persistBrowserTabs(replacement.id)
+    }
+
+    val pendingSwipeCloseToken = pendingSwipeClosedTab?.requestToken
+    LaunchedEffect(pendingSwipeCloseToken) {
+        val expectedToken = pendingSwipeCloseToken ?: return@LaunchedEffect
+        delay(TAB_CLOSE_UNDO_TIMEOUT_MS)
+        finalizePendingSwipeClose(expectedToken)
+    }
+
+    closeTabById = { id -> closeBrowserTabById(id) }
+    focusTabById = { id ->
+        val requestedTab = tabs.firstOrNull { it.id == id }
+        val selectedTab = tabs.firstOrNull { it.id == selectedTabId }
+        if (
+            requestedTab != null &&
+            selectedTab != null &&
+            shouldSwitchToFocusedTab(
+                requestedTabId = requestedTab.id,
+                requestedOpenerTabId = requestedTab.openerTabId,
+                requestedIsPopupSession = requestedTab.isPopupSession,
+                selectedTabId = selectedTab.id,
+                selectedOpenerTabId = selectedTab.openerTabId,
+                selectedIsPopupSession = selectedTab.isPopupSession
+            )
+        ) {
+            selectedTabId = id
+            activePanel = BrowserPanel.None
+        }
+    }
+
+    openNewSessionAsTab = { uri, openerTabId ->
+        val newSession = GeckoSessionController.createSession()
+        var createdTab: BrowserTabRuntime? = null
+        val newTab = BrowserTabRuntime.fromExistingSession(
+            app = app,
+            url = uri,
+            session = newSession,
+            openerTabId = openerTabId,
+            onHyperRoute = { pendingHyperRoute = it },
+            onHyperBridgeMessage = ::handleHyperBridgeMessage,
+            onPageContextMenu = { pageContextMenu = it },
+            onAuthPrompt = { authPrompt = it },
+            onPrompt = { geckoPrompt = it },
+            onFilePrompt = ::handleFilePrompt,
+            onCertificatePrompt = ::handleCertificatePrompt,
+            onSharePrompt = ::handleSharePrompt,
+            onDownload = ::saveGeckoDownload,
+            openNewTabsInCurrentTab = { profileStore.observeSettings().value.openNewTabsInCurrentTab },
+            onNewSession = { nextUri -> openNewSessionAsTab?.invoke(nextUri, createdTab?.id) },
+            onCloseRequest = {
+                createdTab?.id?.let { closeTabById(it) }
+            },
+            onFocusRequest = {
+                createdTab?.id?.let { focusTabById(it) }
+            },
+            onEngineSessionStateChange = { state ->
+                val tabId = createdTab?.id
+                if (tabId != null && state != null) {
+                    profileStore.saveTabSessionState(tabId, state)
+                }
+            },
+            defaultWebsiteDisplayMode = { profileStore.observeSettings().value.websiteDisplayMode },
+            onPageStop = { success ->
+                val tabId = createdTab?.id
+                if (success && tabId != null) {
+                    thumbnailRefreshRequests.tryEmit(tabId)
+                }
+            }
+        )
+        createdTab = newTab
+        tabs.add(newTab)
+        selectedTabId = newTab.id
+        activePanel = BrowserPanel.None
+        message = null
+        persistBrowserTabs(newTab.id)
+        newSession
+    }
+    val persistBrowserTabsForLifecycle by rememberUpdatedState(newValue = { persistBrowserTabs() })
+
+    LaunchedEffect(initialDownloadUrl) {
+        initialDownloadUrl?.let { enqueueUrlDownload(it) }
+    }
+
+    LaunchedEffect(selectedTabId, settings.searchUrlTemplate) {
+        tab.loadIfNeeded(settings.searchUrlTemplate)
+    }
+
+    val pageCanOwnFocus = pageFullScreen ||
+        (activePanel == BrowserPanel.None &&
+            !findInPageVisible &&
+            extensionPopup == null &&
+            pageContextMenu == null)
+
+    DisposableEffect(controller) {
+        onDispose {
+            controller.clearFindInPage()
+        }
+    }
+
+    LaunchedEffect(selectedTabId, pageState.url, pageFullScreen) {
+        if (findInPageVisible) closeFindInPage()
+    }
+
+    LaunchedEffect(selectedTabId, tabs.map { Triple(it.id, it.openerTabId, it.controller) }, pageCanOwnFocus) {
+        val openPopupOpenerIds = tabs.mapNotNull { it.openerTabId }.toSet()
+        tabs.forEach { browserTab ->
+            val selected = browserTab.id == selectedTabId
+            val ownsOpenPopup = browserTab.id in openPopupOpenerIds
+            browserTab.controller?.setVisible(
+                visible = selected || ownsOpenPopup,
+                focused = selected && pageCanOwnFocus
+            )
+        }
+    }
+
+    LaunchedEffect(thumbnailRefreshRequests) {
+        thumbnailRefreshRequests.collectLatest { tabId ->
+            delay(TAB_THUMBNAIL_PAGE_STOP_REFRESH_DELAY_MS)
+            if (currentSelectedTabId.value != tabId) return@collectLatest
+            val targetTab = tabs.firstOrNull { it.id == tabId } ?: return@collectLatest
+            if (!targetTab.hasController) return@collectLatest
+            refreshTabThumbnail(
+                tab = targetTab,
+                shouldApply = { currentSelectedTabId.value == targetTab.id }
+            )
+        }
+    }
+
+    LaunchedEffect(tabs.map { it.id to it.controller }) {
+        val watchedTabs = tabs.mapNotNull { watchedTab ->
+            watchedTab.controller?.let { watchedTab to it }
+        }
+        coroutineScope {
+            watchedTabs.forEach { (watchedTab, watchedController) ->
+                launch {
+                    watchedController.state
+                        .map { it.url to it.title }
+                        .distinctUntilChanged()
+                        .collect { (url, title) ->
+                            if (watchedTab.rememberCommittedLocation(url, title)) {
+                                persistBrowserTabs()
+                            }
+                        }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(selectedTabId, tabs.size, tab.input, tab.iconPath, tab.loaded, tab.restoreUrl, tab.restoredTitle) {
+        persistBrowserTabs()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                tabs.forEach { tab -> tab.flushSessionState() }
+                persistBrowserTabsForLifecycle()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(externalIntents, selectedTabId, settings.searchUrlTemplate) {
+        externalIntents.collect { command ->
+            val commandUrl = command.url
+            val targetTabId = command.selectTabId?.takeIf { id -> tabs.any { it.id == id } }
+            if (targetTabId != null) {
+                selectedTabId = targetTabId
+                closePanel()
+                message = null
+            } else if (command.showDownloads) {
+                showPanel(BrowserPanel.Downloads)
+                message = null
+            } else if (command.openInNewTab && commandUrl != null) {
+                val newTab = createBrowserTab(commandUrl)
+                tabs.add(newTab)
+                selectedTabId = newTab.id
+                closePanel()
+                message = null
+            } else if (command.download && commandUrl != null) {
+                enqueueUrlDownload(commandUrl)
+            } else if (commandUrl != null) {
+                tab.input = commandUrl
+                controller.load(commandUrl, settings.searchUrlTemplate)
+                closePanel()
+                message = null
+            }
+        }
+    }
+
+    LaunchedEffect(selectedTabId, activePanel, pageFullScreen, settings.toolbarPosition, canAutoCollapseToolbar) {
+        toolbarCollapseFraction = 0f
+    }
+
+    LaunchedEffect(showDownloads, downloads) {
+        while (showDownloads || downloads.any {
+                it.status == DownloadStatus.Running || it.status == DownloadStatus.Queued
+            }
+        ) {
+            downloadHandler.refreshSystemDownloads()
+            delay(1000)
+        }
+    }
+
+    LaunchedEffect(showDownloads, showSettings, updateDownloadState.status) {
+        while (showDownloads || showSettings || isActiveUpdateDownload(updateDownloadState)) {
+            updateDownloadState = updateManager.refreshDownloadState()
+            updateDownloadEntry = updateManager.currentDownloadEntry()
+            delay(1000)
+        }
+    }
+
+    BackHandler {
+        when {
+            pageFullScreen -> controller.exitFullScreen()
+            pendingWebAppUninstall != null -> pendingWebAppUninstall = null
+            webAppDetailsDialog != null -> dismissWebAppDetailsDialog()
+            extensionPopup != null -> app.extensions.closePopup()
+            findInPageVisible -> closeFindInPage()
+            activePanel != BrowserPanel.None -> closePanel()
+            pageState.canGoBack -> controller.goBack()
+            openerTabForRootBack(tab.id, tab.openerTabId, tabs.map { it.id }) != null -> {
+                closeBrowserTabById(tab.id, closePanelAfterClose = false)
+            }
+            else -> controller.goBack()
+        }
+    }
+
+    LaunchedEffect(pageState.url, pageState.title) {
+        if (pageState.url.isNotBlank() && !GeckoSessionController.isInternalUrl(pageState.url)) {
+            profileStore.recordVisit(pageState.url, pageState.title, currentIconPath)
+        }
+    }
+
+    LaunchedEffect(pageState.url) {
+        currentIconPath = null
+        if (pageState.url.isBlank()) return@LaunchedEffect
+        if (GeckoSessionController.isInternalUrl(pageState.url)) {
+            tab.clearIcon()
+            return@LaunchedEffect
+        }
+        val iconPath = faviconStore.resolveIconPath(pageState.url)
+        if (pageState.url == controller.state.value.url) {
+            currentIconPath = iconPath
+            if (iconPath != null) {
+                tab.iconPath = iconPath
+                profileStore.recordVisit(pageState.url, controller.state.value.title, iconPath)
+                profileStore.updateBookmarkIcon(pageState.url, iconPath)
+            }
+        }
+    }
+
+    LaunchedEffect(selectedTabId, installedExtensions) {
+        runCatching { app.extensions.refreshMenuActions(controller.session) }
+    }
+
+    LaunchedEffect(app.extensions) {
+        app.extensions.observeNewTabRequests().collect { request ->
+            val newTab = BrowserTabRuntime.fromExtensionRequest(
+                app = app,
+                request = request,
+                onHyperRoute = { pendingHyperRoute = it },
+                onHyperBridgeMessage = ::handleHyperBridgeMessage,
+                onPageContextMenu = { pageContextMenu = it },
+                onAuthPrompt = { authPrompt = it },
+                onPrompt = { geckoPrompt = it },
+                onFilePrompt = ::handleFilePrompt,
+                onCertificatePrompt = ::handleCertificatePrompt,
+                onSharePrompt = ::handleSharePrompt,
+                onDownload = ::saveGeckoDownload
+            )
+            tabs.add(extensionTabInsertionIndex(request.index, tabs.size), newTab)
+            if (request.active) {
+                selectedTabId = newTab.id
+            }
+            closePanel()
+            message = "Opened ${request.title}."
+        }
+    }
+
+    LaunchedEffect(app.extensions) {
+        app.extensions.observeTabCommandRequests().collect { request ->
+            val targetTab = tabs.firstOrNull { it.controller?.session === request.session }
+            when (request.command) {
+                ExtensionTabCommand.Activate -> {
+                    if (targetTab != null) {
+                        selectedTabId = targetTab.id
+                        closePanel()
+                    }
+                }
+
+                ExtensionTabCommand.Close -> {
+                    if (targetTab != null) {
+                        closeBrowserTabById(targetTab.id, closePanelAfterClose = false)
+                        request.closeResult?.complete(AllowOrDeny.ALLOW)
+                    } else {
+                        request.closeResult?.complete(AllowOrDeny.DENY)
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(pendingHyperRoute) {
+        when (pendingHyperRoute) {
+            null -> return@LaunchedEffect
+            HyperRoute.Home -> {
+                tab.input = GeckoSessionController.HOME_URL
+                controller.loadHome()
+            }
+            HyperRoute.Settings -> {
+                showPanel(BrowserPanel.Settings)
+                message = null
+            }
+            HyperRoute.Bookmarks -> {
+                showPanel(BrowserPanel.Bookmarks)
+                message = null
+            }
+            HyperRoute.History -> {
+                showPanel(BrowserPanel.History)
+                message = null
+            }
+        }
+        pendingHyperRoute = null
+    }
+
+    LaunchedEffect(pendingHyperCommand) {
+        when (val command = pendingHyperCommand) {
+            null -> return@LaunchedEffect
+            is HyperCommand.Bookmarks.Open -> {
+                tab.input = command.url
+                controller.load(command.url)
+            }
+            is HyperCommand.History.Open -> {
+                tab.input = command.url
+                controller.load(command.url)
+            }
+            is HyperCommand.History.Remove -> {
+                profileStore.removeHistoryEntry(command.url)
+            }
+            HyperCommand.History.Clear -> {
+                profileStore.clearHistory()
+            }
+            is HyperCommand.Apps.Open -> {
+                if (command.id.isNotBlank()) {
+                    openWebAppInCurrentTab(command.id)
+                }
+            }
+            is HyperCommand.Apps.OpenStandalone -> {
+                if (command.id.isNotBlank()) {
+                    activity.startActivity(WebAppActivity.intent(activity, command.id, true))
+                }
+            }
+            is HyperCommand.Apps.Pin -> {
+                scope.launch {
+                    runCatching { app.webApps.pinToHome(command.id) }
+                        .onSuccess { message = shortcutRequestMessage(context, it) }
+                        .onFailure { message = it.message ?: context.getString(R.string.shortcut_request_failed) }
+                }
+            }
+            HyperCommand.Panel.Extensions -> showPanel(BrowserPanel.Extensions)
+        }
+        pendingHyperCommand = null
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            persistBrowserTabs()
+            tabs.forEach { it.close(closeActivePlayback = false) }
+            pendingSwipeClosedTab?.tab?.let { pendingTab ->
+                pendingTab.close(closeActivePlayback = false)
+                profileStore.deleteTabSessionState(pendingTab.id)
+                profileStore.deleteTabThumbnail(pendingTab.id)
+            }
+        }
+    }
+
+    LaunchedEffect(message) {
+        if (message != null) {
+            delay(2400)
+            message = null
+        }
+    }
+
+    FullscreenSystemBarsEffect(pageFullScreen)
+
+    Box(
+        modifier = if (pageFullScreen) {
+            Modifier.fillMaxSize()
+        } else {
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+        }
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (pageFullScreen) {
+                BrowserContent(
+                    controller = controller,
+                    tabId = tab.id,
+                    extensionPopup = null,
+                    onClosePopup = app.extensions::closePopup,
+                    modifier = Modifier.weight(1f),
+                    imeAvoidanceEnabled = false
+                )
+            } else if (showSearch) {
+                SearchPage(
+                    initialInput = "",
+                    currentTitle = pageState.title,
+                    currentUrl = browserAddressText(pageState.url, tab.input),
+                    history = history,
+                    bookmarks = bookmarks,
+                    webApps = webApps,
+                    onCancel = ::closePanel,
+                    onGo = { value ->
+                        tab.input = value
+                        controller.load(value, settings.searchUrlTemplate)
+                        closePanel()
+                        message = null
+                    },
+                    onOpenWebApp = { webAppId ->
+                        openWebAppInCurrentTab(webAppId, closeCurrentPanel = true)
+                    }
+                )
+            } else if (showSettings) {
+                SettingsPage(
+                    settings = settings,
+                    checkedUpdate = checkedUpdate,
+                    updateDownloadState = updateDownloadState,
+                    ignoringBatteryOptimizations = isIgnoringBatteryOptimizations(),
+                    updateMessage = settingsUpdateMessage,
+                    onBack = ::closePanel,
+                    onUpdateSearchEngine = { searchEngineId, customSearchUrl ->
+                        profileStore.updateSearchEngine(searchEngineId, customSearchUrl)
+                    },
+                    onUpdateToolbarPosition = profileStore::updateToolbarPosition,
+                    onUpdateWebsiteDisplayMode = profileStore::updateWebsiteDisplayMode,
+                    onUpdateBackgroundVideoEnhancement = profileStore::updateBackgroundVideoEnhancement,
+                    onUpdateOpenNewTabsInCurrentTab = profileStore::updateOpenNewTabsInCurrentTab,
+                    onUpdateLocalePreference = { localePreference ->
+                        val previousLocalePreference = profileStore.observeSettings().value.localePreference
+                        profileStore.updateLocalePreference(localePreference)
+                        if (profileStore.observeSettings().value.localePreference != previousLocalePreference) {
+                            activity.window.decorView.post { activity.recreate() }
+                        }
+                    },
+                    onUpdatePrivacySettings = { dohEnabled, dohProviderUrl, httpsOnlyEnabled, privacyProtectionLevel ->
+                        profileStore.updatePrivacySettings(
+                            dohEnabled = dohEnabled,
+                            dohProviderUrl = dohProviderUrl,
+                            httpsOnlyEnabled = httpsOnlyEnabled,
+                            privacyProtectionLevel = privacyProtectionLevel
+                        )
+                        GeckoRuntimeProvider.applyBrowserSettings(app, profileStore.observeSettings().value)
+                    },
+                    onOpenBatteryOptimizationSettings = {
+                        if (!openBatteryOptimizationSettings()) {
+                            message = context.getString(R.string.settings_battery_manual_help)
+                        }
+                    },
+                    onExportBackup = { exportBackupLauncher.launch(defaultBackupFileName()) },
+                    onImportBackup = {
+                        importBackupLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream", "*/*"))
+                    },
+                    onCheckUpdate = {
+                        scope.launch {
+                            settingsUpdateMessage = context.getString(R.string.settings_update_checking)
+                            runCatching { updateManager.check(ignoreSkipped = false) }
+                                .onSuccess { result ->
+                                    checkedUpdate = result.update
+                                    settingsUpdateMessage = result.message.ifBlank {
+                                        if (result.update == null) {
+                                            context.getString(R.string.settings_update_up_to_date)
+                                        } else {
+                                            context.getString(R.string.settings_update_available)
+                                        }
+                                    }
+                                    updateDownloadState = updateManager.refreshDownloadState()
+                                    updateDownloadEntry = updateManager.currentDownloadEntry()
+                                }
+                                .onFailure { throwable ->
+                                    settingsUpdateMessage = throwable.message ?: context.getString(R.string.settings_update_check_failed)
+                                }
+                        }
+                    },
+                    onInstallUpdate = { update ->
+                        updateDownloadState = beginUpdateInstall(update)
+                        settingsUpdateMessage = updateDownloadState.message
+                    },
+                    onSkipUpdate = { update ->
+                        updateManager.skip(update.versionCode)
+                        checkedUpdate = null
+                        settingsUpdateMessage = context.getString(R.string.settings_update_skipped)
+                    },
+                    onClearSkippedUpdate = {
+                        updateManager.clearSkip()
+                        settingsUpdateMessage = context.getString(R.string.settings_update_skip_cleared)
+                    }
+                )
+            } else if (showBookmarks) {
+                BookmarksPage(
+                    bookmarks = bookmarks,
+                    onBack = ::closePanel,
+                    onOpen = { url ->
+                        tab.input = url
+                        controller.load(url)
+                        closePanel()
+                        message = null
+                    },
+                    onRemove = ::removeBookmarkAndSync,
+                    onEdit = ::editBookmarkAndSync,
+                    iconPathFor = { bookmark ->
+                        faviconStore.existingIconPath(bookmark.iconPath)
+                            ?: faviconStore.cachedIconPath(bookmark.url)
+                    }
+                )
+            } else if (showHistory) {
+                HistoryPage(
+                    history = history,
+                    onBack = ::closePanel,
+                    onOpen = { url ->
+                        tab.input = url
+                        controller.load(url)
+                        closePanel()
+                        message = null
+                    },
+                    onRemove = profileStore::removeHistoryEntry,
+                    onClear = profileStore::clearHistory,
+                    iconPathFor = { entry ->
+                        faviconStore.existingIconPath(entry.iconPath)
+                            ?: faviconStore.cachedIconPath(entry.url)
+                    }
+                )
+            } else if (showDownloads) {
+                DownloadsPage(
+                    downloads = listOfNotNull(updateDownloadEntry) + downloads,
+                    onBack = ::closePanel,
+                    onOpen = { entry ->
+                        if (entry.id == AppUpdateManager.APP_UPDATE_DOWNLOAD_ID) {
+                            scope.launch {
+                                val state = updateManager.refreshDownloadState()
+                                updateDownloadState = state
+                                updateDownloadEntry = updateManager.currentDownloadEntry()
+                                if (state.status == UpdateDownloadState.STATUS_READY) {
+                                    val installIntent = updateManager.createInstallIntentForReadyDownload()
+                                    if (installIntent == null) {
+                                        message = context.getString(R.string.update_asset_unavailable)
+                                    } else {
+                                        runCatching { activity.startActivity(installIntent) }
+                                            .onFailure { message = it.message ?: context.getString(R.string.browser_open_installer_failed) }
+                                    }
+                                } else if (state.status == UpdateDownloadState.STATUS_ERROR) {
+                                    message = state.message.ifBlank { context.getString(R.string.update_download_failed) }
+                                } else {
+                                    message = state.message.ifBlank { context.getString(R.string.update_downloading) }
+                                }
+                            }
+                        } else {
+                            val openIntent = downloadHandler.openIntent(entry)
+                            if (openIntent == null) {
+                                message = context.getString(R.string.download_file_not_ready)
+                            } else {
+                                runCatching { activity.startActivity(openIntent) }
+                                    .onFailure { message = it.message ?: context.getString(R.string.download_file_open_failed) }
+                            }
+                        }
+                    },
+                    onRetry = ::retryDownload,
+                    onCancel = ::cancelDownload,
+                    onRemove = { entry, deleteFile ->
+                        scope.launch {
+                            if (entry.id == AppUpdateManager.APP_UPDATE_DOWNLOAD_ID) {
+                                runCatching { updateManager.clearDownload(deleteFile) }
+                                    .onSuccess {
+                                        updateDownloadState = UpdateDownloadState.idle()
+                                        updateDownloadEntry = null
+                                        message = "Download removed."
+                                    }
+                                    .onFailure { message = it.message ?: "Unable to remove download." }
+                            } else {
+                                runCatching { downloadHandler.delete(entry, deleteFile) }
+                                    .onSuccess { message = "Download removed." }
+                                    .onFailure { message = it.message ?: "Unable to remove download." }
+                            }
+                        }
+                    },
+                    onClearFinished = ::clearFinishedDownloads,
+                    canRetry = ::canRetryDownload,
+                    canCancel = ::canCancelDownload,
+                    canDeleteFile = ::canDeleteDownloadFile,
+                    canClear = ::canClearDownload
+                )
+            } else if (showExtensions) {
+                ExtensionsPage(
+                    query = extensionQuery,
+                    installed = installedExtensions,
+                    results = extensionResults,
+                    message = extensionMessage,
+                    installingAddonGuid = installingAddonGuid,
+                    onQueryChange = { extensionQuery = it },
+                    onBack = ::closePanel,
+                    onSearch = {
+                        scope.launch {
+                            extensionSearchStartedState(context.getString(R.string.extensions_searching_amo)).also { state ->
+                                extensionResults = state.results
+                                extensionMessage = state.message
+                            }
+                            val syncedInstalled = runCatching { app.extensions.refreshInstalledFromRuntime() }
+                                .getOrDefault(installedExtensions)
+                            runCatching { app.extensions.searchAndroidAddons(extensionQuery) }
+                                .onSuccess { results ->
+                                    extensionSearchCompletedState(
+                                        results = results,
+                                        installed = syncedInstalled,
+                                        noAndroidAddonsMessage = context.getString(R.string.extensions_no_android_addons),
+                                        allMatchesInstalledMessage = context.getString(R.string.extensions_all_matches_installed),
+                                        foundWithInstalledMessage = { installableCount, installedMatches ->
+                                            context.getString(R.string.extensions_found_with_installed, installableCount, installedMatches)
+                                        }
+                                    ).also { state ->
+                                        extensionResults = state.results
+                                        extensionMessage = state.message
+                                    }
+                                }
+                                .onFailure {
+                                    extensionSearchFailedState(
+                                        it.message ?: context.getString(R.string.extensions_amo_search_failed)
+                                    ).also { state ->
+                                        extensionResults = state.results
+                                        extensionMessage = state.message
+                                    }
+                                }
+                        }
+                    },
+                    onInstall = { addon ->
+                        scope.launch {
+                            installingAddonGuid = addon.guid
+                            runCatching {
+                                app.extensions.downloadAndInstall(addon) { stage ->
+                                    extensionMessage = stage
+                                }
+                            }
+                                .onSuccess {
+                                    runCatching { app.extensions.refreshInstalledFromRuntime() }
+                                    extensionMessage = context.getString(R.string.extensions_installed_name, addon.name)
+                                }
+                                .onFailure { extensionMessage = it.message ?: context.getString(R.string.extensions_install_failed) }
+                            installingAddonGuid = null
+                        }
+                    },
+                    onToggleEnabled = { extension ->
+                        scope.launch {
+                            runCatching { app.extensions.setEnabled(extension.guid, !extension.enabled) }
+                                .onFailure { extensionMessage = it.message ?: context.getString(R.string.extensions_update_failed) }
+                        }
+                    },
+                    onUninstall = { extension ->
+                        scope.launch {
+                            runCatching { app.extensions.uninstall(extension.guid) }
+                                .onFailure { extensionMessage = it.message ?: context.getString(R.string.extensions_uninstall_failed) }
+                        }
+                    }
+                )
+            } else if (showTabs) {
+                TabTray(
+                    tabs = tabs,
+                    faviconStore = faviconStore,
+                    selectedTabId = selectedTabId,
+                    toolbarPosition = settings.toolbarPosition,
+                    mode = tabTrayMode,
+                    onModeChange = { tabTrayMode = it },
+                    onBack = ::closePanel,
+                    onSelect = {
+                        selectedTabId = it
+                        closePanel()
+                    },
+                    onClose = { closeBrowserTabById(it, closePanelAfterClose = false) },
+                    onSwipeClose = ::stageBrowserTabCloseAfterSwipe,
+                    onCloseAll = { closeAllBrowserTabs() },
+                    onNewTab = {
+                        val newTab = createBrowserTab(GeckoSessionController.HOME_URL)
+                        tabs.add(newTab)
+                        selectedTabId = newTab.id
+                        closePanel()
+                    }
+                )
+            } else {
+                val toolbar = @Composable {
+                    val currentPageUrl = pageState.url.ifBlank { tab.input }
+                    val currentPageIsInternal = GeckoSessionController.isInternalUrl(currentPageUrl)
+                    val readerModeAvailable = currentPageUrl.startsWith("http://") ||
+                        currentPageUrl.startsWith("https://")
+                    val storedPageBookmarked = !currentPageIsInternal && profileStore.isBookmarked(currentPageUrl)
+                    val currentPageBookmarked = optimisticBookmarkState
+                        ?.takeIf { it.first == currentPageUrl }
+                        ?.second
+                        ?: storedPageBookmarked
+                    LaunchedEffect(currentPageUrl, storedPageBookmarked) {
+                        if (optimisticBookmarkState == (currentPageUrl to storedPageBookmarked)) {
+                            optimisticBookmarkState = null
+                        }
+                    }
+                    val installedWebApp = if (currentPageIsInternal) {
+                        null
+                    } else {
+                        webApps.firstOrNull { it.startUrl == currentPageUrl }
+                    }
+                    BrowserToolbar(
+                        input = tab.input,
+                        pageState = pageState,
+                        tabCount = tabs.size,
+                        bookmarked = currentPageBookmarked,
+                        webAppInstalled = installedWebApp != null,
+                        installedExtensions = installedExtensions,
+                        extensionActions = extensionActions,
+                        toolbarPosition = settings.toolbarPosition,
+                        floatingDotXRatio = settings.floatingDotXRatio,
+                        floatingDotYRatio = settings.floatingDotYRatio,
+                        websiteDisplayModeAvailable = !currentPageIsInternal,
+                        websiteDisplayMode = tab.currentWebsiteDisplayMode(settings.websiteDisplayMode),
+                        temporaryWebsiteDisplayMode = tab.temporaryWebsiteDisplayMode,
+                        readerModeAvailable = readerModeAvailable,
+                        readerModeActive = readerModeActive,
+                        collapseFraction = animatedToolbarCollapseFraction,
+                        downloads = downloads,
+                        addressSecurityLevel = addressSecurityLevel(pageState.securityLevel, settings),
+                        onOpenSearchPage = {
+                            showPanel(BrowserPanel.Search)
+                            message = null
+                        },
+                        onBack = controller::goBack,
+                        onForward = controller::goForward,
+                        onReload = controller::reload,
+                        onTemporaryWebsiteDisplayModeChange = { mode ->
+                            tab.updateTemporaryWebsiteDisplayMode(mode)
+                            controller.applyWebsiteDisplayModeForUrl(currentPageUrl)
+                            controller.reload()
+                            message = context.getString(R.string.browser_temporary_display_mode_reloaded)
+                        },
+                        onShowTabs = {
+                            refreshTabThumbnail(tab) {
+                                showPanel(BrowserPanel.Tabs)
+                            }
+                        },
+                        onNewTab = {
+                            val newTab = createBrowserTab(GeckoSessionController.HOME_URL)
+                            tabs.add(newTab)
+                            selectedTabId = newTab.id
+                            closePanel()
+                            message = null
+                        },
+                        onSwipeToAdjacentTab = { step ->
+                            adjacentTabId(
+                                tabIds = tabs.map { it.id },
+                                selectedTabId = selectedTabId,
+                                step = step
+                            )?.let { targetTabId ->
+                                selectedTabId = targetTabId
+                                message = null
+                            }
+                        },
+                        onHome = {
+                            tab.input = GeckoSessionController.HOME_URL
+                            controller.loadHome()
+                            message = null
+                        },
+                        onToggleBookmark = toggleBookmark@{
+                            if (currentPageUrl.isBlank() || currentPageIsInternal) return@toggleBookmark
+                            optimisticBookmarkState = currentPageUrl to !currentPageBookmarked
+                            if (currentPageBookmarked) {
+                                removeBookmarkThroughBackground(currentPageUrl) {
+                                    optimisticBookmarkState = currentPageUrl to currentPageBookmarked
+                                }
+                            } else {
+                                saveBookmarkThroughBackground(currentPageUrl, pageState.title) {
+                                    optimisticBookmarkState = currentPageUrl to currentPageBookmarked
+                                }
+                            }
+                        },
+                        onToggleReaderMode = {
+                            controller.toggleReaderMode().accept(
+                                { active ->
+                                    message = context.getString(
+                                        if (active == true) {
+                                            R.string.reader_mode_enabled
+                                        } else {
+                                            R.string.reader_mode_disabled
+                                        }
+                                    )
+                                },
+                                { throwable ->
+                                    Log.w(BROWSER_ACTIVITY_TAG, "Failed to toggle reader mode", throwable)
+                                    message = context.getString(R.string.reader_mode_not_available)
+                                }
+                            )
+                        },
+                        onFindInPage = {
+                            findInPageRequestId += 1
+                            findInPageState = FindInPageUiState()
+                            findInPageVisible = true
+                            message = null
+                        },
+                        onShowBookmarks = {
+                            showPanel(BrowserPanel.Bookmarks)
+                            message = null
+                        },
+                        onShowHistory = {
+                            showPanel(BrowserPanel.History)
+                            message = null
+                        },
+                        onShowSettings = {
+                            showPanel(BrowserPanel.Settings)
+                            message = null
+                        },
+                        onShowDownloads = { showPanel(BrowserPanel.Downloads) },
+                        onShowExtensions = { showPanel(BrowserPanel.Extensions) },
+                        onExtensionClick = { extension ->
+                            scope.launch {
+                                runCatching { app.extensions.clickMenuAction(extension.guid) }
+                                    .onFailure { message = it.message ?: context.getString(R.string.extensions_popup_unavailable) }
+                            }
+                        },
+                        onFloatingDotPositionChange = profileStore::updateFloatingDotPosition,
+                        onInstall = install@{
+                            installedWebApp?.let { webApp ->
+                                pendingWebAppUninstall = webApp
+                                return@install
+                            }
+                            if (GeckoSessionController.isInternalUrl(pageState.url)) {
+                                message = context.getString(R.string.webapp_open_page_before_install)
+                                return@install
+                            }
+                            val title = pageState.title.ifBlank { tab.input }
+                            val url = pageState.url.ifBlank { tab.input }
+                            showInstallWebAppDetailsDialog(title, url, currentIconPath)
+                        }
+                    )
+                }
+                val pageContent: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier = modifier) {
+                        if (findInPageVisible) {
+                            FindInPageBar(
+                                state = findInPageState,
+                                onQueryChange = { query -> findInPage(query) },
+                                onPrevious = { findInPage(searchString = null, backwards = true) },
+                                onNext = { findInPage(searchString = null) },
+                                onClose = ::closeFindInPage
+                            )
+                        }
+                        BrowserContent(
+                            controller = controller,
+                            tabId = tab.id,
+                            extensionPopup = extensionPopup,
+                            onClosePopup = app.extensions::closePopup,
+                            modifier = Modifier.weight(1f),
+                            onContentTouchStarted = ::handlePageContentTouchStarted,
+                            onContentScrollDelta = ::handlePageContentScrollDelta
+                        )
+                    }
+                }
+                if (BrowserSettings.isFloatingDotToolbarPosition(settings.toolbarPosition)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        pageContent(Modifier.fillMaxSize())
+                        toolbar()
+                    }
+                } else if (canAutoCollapseToolbar) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        pageContent(Modifier.fillMaxSize())
+                        Box(
+                            modifier = Modifier.align(
+                                if (BrowserSettings.isBottomToolbarPosition(settings.toolbarPosition)) {
+                                    Alignment.BottomCenter
+                                } else {
+                                    Alignment.TopCenter
+                                }
+                            )
+                        ) {
+                            toolbar()
+                        }
+                    }
+                } else if (BrowserSettings.isBottomToolbarPosition(settings.toolbarPosition)) {
+                    pageContent(Modifier.weight(1f))
+                    toolbar()
+                } else {
+                    toolbar()
+                    pageContent(Modifier.weight(1f))
+                }
+            }
+        }
+        pageContextMenu?.let { menu ->
+            fun copyContextUrl(clipLabel: String, url: String, toast: String) {
+                scope.launch {
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(clipLabel, url)))
+                }
+                pageContextMenu = null
+                message = toast
+            }
+            PageContextMenuDialog(
+                target = menu,
+                onDismissRequest = { pageContextMenu = null },
+                onDownloadImage = { url ->
+                    pageContextMenu = null
+                    enqueueUrlDownload(url)
+                },
+                onOpenImage = ::openLinkInBackgroundTab,
+                onCopyImage = { url -> copyContextUrl("image", url, imageCopiedText) },
+                onOpenLink = ::openLinkInBackgroundTab,
+                onCopyLink = { url -> copyContextUrl("link", url, linkCopiedText) }
+            )
+        }
+        authPrompt?.let { request ->
+            AuthPromptDialog(
+                request = request,
+                onFinished = { authPrompt = null }
+            )
+        }
+        geckoPrompt?.let { request ->
+            GeckoPromptDialog(
+                prompt = request,
+                onFinished = { geckoPrompt = null }
+            )
+        }
+        pendingWebAppUninstall?.let { webApp ->
+            AlertDialog(
+                onDismissRequest = { pendingWebAppUninstall = null },
+                title = { Text(stringResource(R.string.webapp_uninstall_confirm_title)) },
+                text = {
+                    Text(stringResource(R.string.webapp_uninstall_confirm_message, webApp.name))
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingWebAppUninstall = null
+                            deleteWebAppThroughBackground(webApp)
+                        }
+                    ) {
+                        Text(stringResource(R.string.menu_uninstall_webapp))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingWebAppUninstall = null }) {
+                        Text(stringResource(R.string.common_action_cancel))
+                    }
+                }
+            )
+        }
+        webAppDetailsDialog?.let { dialog ->
+            WebAppDetailsDialog(
+                state = dialog,
+                onNameChange = { name -> webAppDetailsDialog = dialog.copy(name = name) },
+                onStartUrlChange = { url -> webAppDetailsDialog = dialog.copy(startUrl = url) },
+                onSelect = { selection -> webAppDetailsDialog = dialog.copy(selectedIcon = selection) },
+                onChooseImage = { webAppIconImageLauncher.launch("image/*") },
+                onConfirm = { action -> confirmWebAppDetailsDialog(dialog, action) },
+                onDismiss = { dismissWebAppDetailsDialog() }
+            )
+        }
+        pendingBackupImport?.let { pending ->
+            AlertDialog(
+                onDismissRequest = {
+                    pendingBackupImport = null
+                    message = context.getString(R.string.backup_import_canceled)
+                },
+                title = { Text(stringResource(R.string.backup_import_confirm_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.backup_import_confirm_message,
+                            pending.preview.bookmarks,
+                            pending.preview.webApps
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { confirmBackupImport(pending) }) {
+                        Text(stringResource(R.string.settings_import_json))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            pendingBackupImport = null
+                            message = context.getString(R.string.backup_import_canceled)
+                        }
+                    ) {
+                        Text(stringResource(R.string.common_action_cancel))
+                    }
+                }
+            )
+        }
+        if (!pageFullScreen) {
+            BrowserTip(
+                message = if (pendingSwipeClosedTab != null) {
+                    stringResource(R.string.tabs_closed)
+                } else {
+                    message
+                },
+                toolbarPosition = settings.toolbarPosition,
+                actionLabel = if (pendingSwipeClosedTab != null) {
+                    stringResource(R.string.tabs_undo_close)
+                } else {
+                    null
+                },
+                onAction = ::undoPendingSwipeClose,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+    }
+}
+
+internal data class ExtensionSearchUiState(
+    val results: List<AmoAddonListing>,
+    val message: String?
+)
+
+internal fun extensionSearchStartedState(message: String): ExtensionSearchUiState =
+    ExtensionSearchUiState(results = emptyList(), message = message)
+
+internal fun extensionSearchFailedState(message: String): ExtensionSearchUiState =
+    ExtensionSearchUiState(results = emptyList(), message = message)
+
+internal fun extensionSearchCompletedState(
+    results: List<AmoAddonListing>,
+    installed: List<InstalledExtensionState>,
+    noAndroidAddonsMessage: String,
+    allMatchesInstalledMessage: String,
+    foundWithInstalledMessage: (installableCount: Int, installedMatches: Int) -> String
+): ExtensionSearchUiState {
+    val installedGuids = installed.map { it.guid }.toSet()
+    val installedMatches = results.count { it.guid in installedGuids }
+    val installableCount = results.size - installedMatches
+    val message = when {
+        results.isEmpty() -> noAndroidAddonsMessage
+        installableCount == 0 -> allMatchesInstalledMessage
+        installedMatches > 0 -> foundWithInstalledMessage(installableCount, installedMatches)
+        else -> null
+    }
+    return ExtensionSearchUiState(results = results, message = message)
+}
+
+private fun shortcutRequestMessage(context: Context, result: PinnedShortcutRequestResult): String =
+    when (result) {
+        PinnedShortcutRequestResult.Requested -> context.getString(R.string.shortcut_request_create)
+        PinnedShortcutRequestResult.Unsupported -> context.getString(R.string.shortcut_request_unsupported)
+        PinnedShortcutRequestResult.Failed -> context.getString(R.string.shortcut_request_failed)
+        PinnedShortcutRequestResult.WebAppNotFound -> context.getString(R.string.webapp_not_found)
+    }
+
+private fun addWebAppToLauncherLayout(context: Context, id: String, name: String, startUrl: String) {
+    val payload = JSONObject()
+        .put("webApp", JSONObject()
+            .put("id", id)
+            .put("name", name)
+            .put("startUrl", startUrl))
+    HyperBridge.sendBackgroundCommand(context, "launcher.layout.addWebApp", payload)
+        .accept(
+            { },
+            { throwable -> Log.w(BROWSER_ACTIVITY_TAG, "Failed to add WebApp to launcher layout", throwable) }
+        )
+}
+
+private fun normalizeWebAppUrl(input: String): String? {
+    val trimmed = input.trim()
+    if (trimmed.isBlank()) return null
+    val normalized = if (
+        trimmed.startsWith("http://", ignoreCase = true) ||
+        trimmed.startsWith("https://", ignoreCase = true)
+    ) {
+        trimmed
+    } else if (trimmed.contains(".") && !trimmed.any { it.isWhitespace() }) {
+        "https://$trimmed"
+    } else {
+        trimmed
+    }
+    return normalized.takeIf {
+        it.startsWith("http://", ignoreCase = true) ||
+            it.startsWith("https://", ignoreCase = true)
+    }
+}
+
+private fun cleanWebAppName(context: Context, name: String, url: String): String =
+    name.trim().ifBlank {
+        Uri.parse(url).host.orEmpty().removePrefix("www.").ifBlank {
+            context.getString(R.string.browser_search_source_webapp)
+        }
+    }
+
+private fun addressSecurityLevel(
+    pageSecurity: GeckoPageSecurity,
+    settings: BrowserSettings
+): AddressSecurityLevel =
+    when (pageSecurity) {
+        GeckoPageSecurity.Insecure -> AddressSecurityLevel.Insecure
+        GeckoPageSecurity.Secure,
+        GeckoPageSecurity.Verified -> {
+            if (settings.dohEnabled && settings.echEnabled) {
+                AddressSecurityLevel.Enhanced
+            } else {
+                AddressSecurityLevel.Secure
+            }
+        }
+        GeckoPageSecurity.Neutral -> AddressSecurityLevel.Neutral
+    }

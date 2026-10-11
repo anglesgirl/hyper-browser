@@ -14,11 +14,11 @@ fun pnpmCommand(vararg args: String): List<String> {
 }
 
 android {
-    namespace = "com.dadigua.hyperbrowser"
+    namespace = "com.anglesgirl.ao3reader"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dadigua.hyperbrowser"
+        applicationId = "com.anglesgirl.ao3reader"
         minSdk = 26
         targetSdk = 36
         versionCode = 20

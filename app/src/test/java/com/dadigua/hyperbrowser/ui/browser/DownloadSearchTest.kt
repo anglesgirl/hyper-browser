@@ -1,7 +1,7 @@
-package com.dadigua.hyperbrowser.ui.browser
+package com.anglesgirl.ao3reader.ui.browser
 
-import com.dadigua.hyperbrowser.browser.BrowserDownloadEntry
-import com.dadigua.hyperbrowser.browser.DownloadStatus
+import com.anglesgirl.ao3reader.browser.BrowserDownloadEntry
+import com.anglesgirl.ao3reader.browser.DownloadStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

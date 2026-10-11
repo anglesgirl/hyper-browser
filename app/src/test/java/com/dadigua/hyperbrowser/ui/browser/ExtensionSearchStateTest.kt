@@ -1,7 +1,7 @@
-package com.dadigua.hyperbrowser.ui.browser
+package com.anglesgirl.ao3reader.ui.browser
 
-import com.dadigua.hyperbrowser.data.InstalledExtensionState
-import com.dadigua.hyperbrowser.extensions.AmoAddonListing
+import com.anglesgirl.ao3reader.data.InstalledExtensionState
+import com.anglesgirl.ao3reader.extensions.AmoAddonListing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

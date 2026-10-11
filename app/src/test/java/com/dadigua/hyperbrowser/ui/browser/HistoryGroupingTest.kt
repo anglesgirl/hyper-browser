@@ -1,6 +1,6 @@
-package com.dadigua.hyperbrowser.ui.browser
+package com.anglesgirl.ao3reader.ui.browser
 
-import com.dadigua.hyperbrowser.browser.BrowserHistoryEntry
+import com.anglesgirl.ao3reader.browser.BrowserHistoryEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

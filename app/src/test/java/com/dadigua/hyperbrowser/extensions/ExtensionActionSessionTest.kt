@@ -1,4 +1,4 @@
-package com.dadigua.hyperbrowser.extensions
+package com.anglesgirl.ao3reader.extensions
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
