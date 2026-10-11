@@ -10,6 +10,20 @@
   function saveStore(s) {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) {}
   }
+  // AO3 Reader 默认值预设：翻译服务=腾讯翻译、显示翻译按钮、显示悬浮按钮
+  // 仅当用户未显式设置（或仍是脚本默认 google_translate）时写入，尊重用户后续修改
+  (function applyDefaults() {
+    try {
+      var s = loadStore();
+      var changed = false;
+      if (!('transEngine' in s) || s.transEngine === 'google_translate') {
+        s.transEngine = 'tencent_translator'; changed = true;
+      }
+      if (!('show_fab' in s)) { s.show_fab = true; changed = true; }
+      if (!('enable_transDesc' in s)) { s.enable_transDesc = true; changed = true; }
+      if (changed) saveStore(s);
+    } catch (e) {}
+  })();
   window.GM_getValue = function (key, def) {
     var s = loadStore();
     return Object.prototype.hasOwnProperty.call(s, key) ? s[key] : def;
