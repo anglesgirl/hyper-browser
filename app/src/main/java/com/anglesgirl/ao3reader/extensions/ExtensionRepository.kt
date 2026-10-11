@@ -641,7 +641,7 @@ class ExtensionRepository(
                 installedAt = System.currentTimeMillis()
             )
         )
-        Log.i(TAG, "AO3 Translator installed via ensureBuiltIn: ${installedExtension.id}")
+        Log.i(TAG, "AO3 Translator installed via ensureBuiltIn")
     }
 
     private fun WebExtension.toInstalledState(
