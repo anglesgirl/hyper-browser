@@ -23,6 +23,10 @@ const ANDROID_SYSTEM_ENTRY_THEME: LauncherSystemEntryTheme = {
   bookmarks: { color: "#0d7f66" },
   history: { color: "#f4a900" },
   extensions: { color: "#d73547" },
+  works: { color: "#d73547" },
+  search: { color: "#0d7f66" },
+  favorites: { color: "#7b4fd8" },
+  downloads: { color: "#f4a900" },
 };
 
 function HomePage() {
@@ -97,6 +101,10 @@ function HomePage() {
       if (action === "bookmarks") window.hyperBrowser.showBookmarks();
       if (action === "history") window.hyperBrowser.showHistory();
       if (action === "extensions") window.hyperBrowser.showExtensions();
+      if (action === "works") window.location.href = "https://archiveofourown.org/works";
+      if (action === "search") window.location.href = "https://archiveofourown.org/search";
+      if (action === "favorites") window.location.href = "https://archiveofourown.org/bookmarks";
+      if (action === "downloads") window.hyperBrowser.showDownloads();
     },
     deleteApp: async (app) => {
       const items = await sendBackgroundCommand<WebAppItem[]>("webapps.delete", { id: app.id });
@@ -127,9 +135,6 @@ function HomePage() {
 
   return (
     <>
-      <div className="ao3-home-top">
-        <QuickLinks />
-      </div>
       <LauncherPage
         labels={launcherLabels}
         platform={platform}
@@ -142,45 +147,6 @@ function HomePage() {
       />
       {webDavSync.settingsDialog}
     </>
-  );
-}
-
-// ===== AO3 Reader 常用入口卡片 =====
-type QuickLink = {
-  label: string;
-  url?: string;
-  downloads?: boolean;
-  color: string;
-};
-
-const QUICK_LINKS: QuickLink[] = [
-  { label: "作品库", url: "https://archiveofourown.org/works", color: "#d73547" },
-  { label: "搜索", url: "https://archiveofourown.org/search", color: "#0d7f66" },
-  { label: "收藏", url: "https://archiveofourown.org/bookmarks", color: "#7b4fd8" },
-  { label: "我的下载", downloads: true, color: "#f4a900" },
-];
-
-function QuickLinks() {
-  return (
-    <div className="ao3-quicklinks">
-      {QUICK_LINKS.map((link) => (
-        <button
-          key={link.label}
-          type="button"
-          className="ao3-quicklink"
-          style={{ borderTopColor: link.color }}
-          onClick={() => {
-            if (link.downloads) {
-              window.hyperBrowser.showDownloads();
-            } else if (link.url) {
-              window.location.href = link.url;
-            }
-          }}
-        >
-          <span className="ao3-quicklink-label">{link.label}</span>
-        </button>
-      ))}
-    </div>
   );
 }
 

@@ -59,8 +59,8 @@ export type LauncherSystemEntry = {
   action: string;
 };
 
-export type LauncherSystemIconName = "bookmarks" | "history" | "extensions";
-export type LauncherSystemAction = "bookmarks" | "history" | "extensions";
+export type LauncherSystemIconName = "bookmarks" | "history" | "extensions" | "works" | "search" | "favorites" | "downloads";
+export type LauncherSystemAction = "bookmarks" | "history" | "extensions" | "works" | "search" | "favorites" | "downloads";
 export type LauncherTranslate = (key: string, values?: Record<string, unknown>) => string;
 
 export const DEFAULT_LAUNCHER_DOCK_ENTRY_IDS = ["system:bookmarks", "system:history", "system:extensions"];
@@ -202,6 +202,10 @@ const launcherSystemEntryDefinitions: Array<{
   { action: "bookmarks", titleKey: "home.bookmarks", mark: "B", color: "#34a853", systemIcon: "bookmarks" },
   { action: "history", titleKey: "home.history", mark: "H", color: "#fbbc04", systemIcon: "history" },
   { action: "extensions", titleKey: "home.extensions", mark: "Ex", color: "#ea4335", systemIcon: "extensions" },
+  { action: "works", titleKey: "home.works", mark: "W", color: "#d73547", systemIcon: "works" },
+  { action: "search", titleKey: "home.search", mark: "S", color: "#0d7f66", systemIcon: "search" },
+  { action: "favorites", titleKey: "home.favorites", mark: "F", color: "#7b4fd8", systemIcon: "favorites" },
+  { action: "downloads", titleKey: "home.downloads", mark: "D", color: "#f4a900", systemIcon: "downloads" },
 ];
 
 export function createLauncherSystemEntries(
@@ -292,6 +296,10 @@ function translateEnglishLauncherLabel(key: string, values?: Record<string, unkn
     "common.save": "Save",
     "common.url": "URL",
     "home.bookmarks": "Bookmarks",
+    "home.works": "Works",
+    "home.search": "Search",
+    "home.favorites": "Favorites",
+    "home.downloads": "Downloads",
     "home.history": "History",
     "home.extensions": "Extensions",
     "home.folder": "Folder",
@@ -2047,6 +2055,37 @@ function SystemIconGlyph({ name, compact = false }: { name: LauncherSystemIconNa
         <path className="system-glyph-line" d="M18 13v11.5H6.5" />
         <path className="system-glyph-line fine" d="M32 22v12l9 5.5" />
         <circle className="system-glyph-dot" cx="32" cy="34" r="2.8" />
+      </svg>
+    );
+  }
+  if (name === "works") {
+    return (
+      <svg {...common}>
+        <path className="system-glyph-line" d="M14 18c0-2.21 1.79-4 4-4h7l6 8h10c2.21 0 4 1.79 4 4v18c0 2.21-1.79 4-4 4H18c-2.21 0-4-1.79-4-4V18z" />
+        <path className="system-glyph-line fine" d="M14 26h36M14 34h36" />
+      </svg>
+    );
+  }
+  if (name === "search") {
+    return (
+      <svg {...common}>
+        <circle className="system-glyph-line" cx="27" cy="27" r="14" />
+        <path className="system-glyph-line" d="M37.5 37.5 52 52" />
+      </svg>
+    );
+  }
+  if (name === "favorites") {
+    return (
+      <svg {...common}>
+        <path className="system-glyph-line" d="M32 13l5.6 11.35 12.5 1.82-9.05 8.8 2.14 12.47L32 42.36l-11.2 5.08 2.14-12.47-9.05-8.8 12.5-1.82L32 13z" />
+      </svg>
+    );
+  }
+  if (name === "downloads") {
+    return (
+      <svg {...common}>
+        <path className="system-glyph-line" d="M32 12v28M22 32l10 10 10-10" />
+        <path className="system-glyph-line" d="M14 52h36" />
       </svg>
     );
   }
