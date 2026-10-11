@@ -977,18 +977,22 @@ private fun BrowserScreen(
                 }
                 val result = GeckoResult<Any>()
                 scope.launch(Dispatchers.IO) {
-                    val response = runCatching {
+                    val response: JSONObject
+                    try {
                         val request = Request.Builder()
                             .url(targetUrl)
                             .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                             .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
                             .build()
-                        bridgeHttpClient.newCall(request).execute().use { resp ->
-                            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+                        val resp = bridgeHttpClient.newCall(request).execute()
+                        response = if (resp.isSuccessful) {
                             JSONObject().put("ok", true).put("data", resp.body?.string().orEmpty())
+                        } else {
+                            JSONObject().put("ok", false).put("error", "HTTP ${resp.code}")
                         }
-                    }.getOrElse { e ->
-                        JSONObject().put("ok", false).put("error", e.message ?: "fetch failed")
+                        resp.close()
+                    } catch (e: Exception) {
+                        response = JSONObject().put("ok", false).put("error", e.message ?: "fetch failed")
                     }
                     completeBridgeResult(result, response)
                 }
