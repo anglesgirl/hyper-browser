@@ -8,6 +8,13 @@
       "id": "ao3-zh@anglesgirl.com"
     }
   },
+  "permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
   "content_scripts": [
     {
       "matches": [

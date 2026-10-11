@@ -1,5 +1,6 @@
-// ===== AO3 Translator GM API 兼容垫片（AO3 Reader 内置） =====
+// ===== AO3 Translator GM API 兼容垫片（AO3 Reader 内置 v2） =====
 // 来源: V-Lipset/ao3-chinese (GPL-3.0)，local.user.js 的 GM_* 依赖在此垫片实现
+// v2: GM_xmlhttpRequest 转发到 background 脚本执行跨域请求（绕过页面同源策略）
 (function () {
   if (typeof window.GM_getValue !== 'undefined') return;
   var STORE_KEY = 'ao3-zh-gm-store';
@@ -31,22 +32,63 @@
     scriptHandler: 'ao3-reader',
     version: '1.10.2'
   };
+  // ---- GM_xmlhttpRequest：优先转发 background（跨域），失败降级同源 fetch ----
   window.GM_xmlhttpRequest = function (details) {
-    var method = details.method || 'GET';
-    var headers = details.headers || {};
-    fetch(details.url, {
-      method: method,
-      headers: headers,
-      body: details.data || (method === 'GET' ? undefined : undefined)
-    }).then(function (r) {
-      return r.text().then(function (text) {
-        if (details.onload) details.onload({
-          status: r.status, responseText: text, responseHeaders: '', readyState: 4, response: text
+    var settled = false;
+    function finish(resp) {
+      if (settled) return;
+      settled = true;
+      try {
+        if (resp && resp.error) {
+          if (details.onerror) details.onerror(resp);
+        } else if (details.onload) {
+          details.onload(resp);
+        } else if (resp && resp.error && details.onerror) {
+          details.onerror(resp);
+        }
+      } catch (e) {}
+    }
+    function sendToBackground() {
+      var msg = {
+        type: 'GM_xmlhttpRequest',
+        url: details.url,
+        method: details.method || 'GET',
+        headers: details.headers || {},
+        data: details.data,
+        timeout: details.timeout || 0
+      };
+      try {
+        var b = (typeof browser !== 'undefined') ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+        if (b && b.runtime && b.runtime.sendMessage) {
+          var p = b.runtime.sendMessage(msg);
+          if (p && typeof p.then === 'function') {
+            p.then(function (r) { finish(r || { status: 0, responseText: '', readyState: 4 }); })
+             .catch(function (e) { finish({ error: String(e), status: 0, readyState: 0 }); });
+          } else {
+            finish(p || { status: 0, responseText: '', readyState: 4 });
+          }
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+    if (!sendToBackground()) {
+      // 降级：同源直连（无 background 环境兜底）
+      var ctl = null;
+      if (details.timeout) { ctl = new AbortController(); setTimeout(function(){ ctl.abort(); }, details.timeout); }
+      fetch(details.url, {
+        method: details.method || 'GET',
+        headers: details.headers || {},
+        body: details.data || undefined,
+        signal: ctl ? ctl.signal : undefined
+      }).then(function (r) {
+        return r.text().then(function (text) {
+          finish({ status: r.status, responseText: text, responseHeaders: '', readyState: 4, finalUrl: r.url });
         });
+      }).catch(function (err) {
+        finish({ error: String((err && err.name) || err || 'network'), status: 0, responseText: '', readyState: 0 });
       });
-    }).catch(function (err) {
-      if (details.onerror) details.onerror({ error: err, readyState: 0 });
-    });
+    }
   };
   window.GM_notification = function () {};
   window.GM_addStyle = function (css) {
