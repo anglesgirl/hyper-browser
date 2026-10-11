@@ -1124,11 +1124,11 @@ private fun BrowserScreen(
                 state?.let { profileStore.saveTabSessionState(tabId, it) }
             },
             defaultWebsiteDisplayMode = { profileStore.observeSettings().value.websiteDisplayMode },
-            onPageStop = { success ->
-                if (success) {
+            onPageStop = { s, ok ->
+                if (ok) {
                     thumbnailRefreshRequests.tryEmit(tabId)
                     runCatching {
-                        val uri = session.currentUri?.toString().orEmpty()
+                        val uri = s.currentUri?.toString().orEmpty()
                         if (uri.contains("archiveofourown.org")) {
                             Analytics.track("ao3_open", mapOf("url" to uri.take(200)))
                         }
@@ -1572,12 +1572,12 @@ private fun BrowserScreen(
                 }
             },
             defaultWebsiteDisplayMode = { profileStore.observeSettings().value.websiteDisplayMode },
-            onPageStop = { success ->
+            onPageStop = { s, ok ->
                 val tabId = createdTab?.id
-                if (success && tabId != null) {
+                if (ok && tabId != null) {
                     thumbnailRefreshRequests.tryEmit(tabId)
                     runCatching {
-                        val uri = session.currentUri?.toString().orEmpty()
+                        val uri = s.currentUri?.toString().orEmpty()
                         if (uri.contains("archiveofourown.org")) {
                             Analytics.track("ao3_open", mapOf("url" to uri.take(200)))
                         }

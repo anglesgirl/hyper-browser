@@ -30,7 +30,7 @@ object Analytics {
                 val k = key.take(40)
                 when (value) {
                     is String -> bundle.putString(k, value.take(100))
-                    is Number -> bundle.putDouble(k, value.toDouble())
+                    is Number -> bundle.putDouble(k, value.toString().toDoubleOrNull() ?: 0.0)
                     is Boolean -> bundle.putBoolean(k, value)
                     null -> {}
                     else -> bundle.putString(k, String(value).take(100))
