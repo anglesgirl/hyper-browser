@@ -33,7 +33,7 @@ object Analytics {
                     is Number -> bundle.putDouble(k, value.toString().toDoubleOrNull() ?: 0.0)
                     is Boolean -> bundle.putBoolean(k, value)
                     null -> {}
-                    else -> bundle.putString(k, String(value).take(100))
+                    else -> bundle.putString(k, value.toString().take(100))
                 }
             }
             fb.logEvent(name.take(40), bundle)
