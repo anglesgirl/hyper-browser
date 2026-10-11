@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.anglesgirl.ao3reader.HyperBrowserApp
 import com.anglesgirl.ao3reader.data.AtomicFileWriter
 import com.anglesgirl.ao3reader.data.InstalledExtensionState
@@ -95,6 +96,7 @@ internal fun supportsExtensionTabCreate(
 class ExtensionRepository(
     private val context: Context
 ) {
+    private val TAG = "ExtensionRepository"
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
@@ -601,25 +603,32 @@ class ExtensionRepository(
 
     /**
      * 安装随包内置的 AO3 Translator 扩展（V-Lipset/ao3-chinese，GPL-3.0）。
-     * XPI 打包在 assets（internal-pages/public/ao3-zh.xpi -> assets/ao3-zh.xpi），
-     * 首次启动复制到 filesDir 走标准 WebExtensionController.install 通道，
-     * 与 AMO 安装同链路（background 网络权限正常授予），幂等。
+     * 与 hyper-browser 内部扩展同机制：GeckoView ensureBuiltIn 从 assets 加载
+     * （resource://android/assets/ao3-zh/），幂等；成功后登记到扩展列表，
+     * 使“扩展”菜单可见、可开关。任何失败都打日志（不静默）。
      */
     suspend fun installBundledA03Zh() {
         val guid = "ao3-zh@anglesgirl.com"
-        if (findRuntimeExtension(guid) != null) return
         if (installedState.value.any { it.guid == guid }) return
-
-        val xpi = withContext(Dispatchers.IO) {
-            val src = context.assets.open("ao3-zh.xpi")
-            val extensionDir = File(context.filesDir, "extensions").apply { mkdirs() }
-            val target = File(extensionDir, "ao3-zh-1.10.2.xpi")
-            if (target.exists() && target.length() > 0) return@withContext target
-            target.outputStream().use { out -> src.copyTo(out) }
-            target
+        val installedExtension = withContext(Dispatchers.Main.immediate) {
+            val controller = GeckoRuntimeProvider.get(context).webExtensionController
+            val result = runCatching {
+                controller.ensureBuiltIn("resource://android/assets/ao3-zh/", guid)
+            }.getOrElse { error ->
+                Log.e(TAG, "AO3 Translator ensureBuiltIn threw", error)
+                throw error
+            }
+            val ext = runCatching { withTimeout(30_000) { result.await() } }
+                .getOrElse { error ->
+                    Log.e(TAG, "AO3 Translator ensureBuiltIn await failed", error)
+                    throw error
+                }
+            if (ext == null) {
+                Log.e(TAG, "AO3 Translator ensureBuiltIn returned null")
+                throw IllegalStateException("ensureBuiltIn returned null for $guid")
+            }
+            ext
         }
-
-        installRaw(xpi)
         upsertInstalled(
             InstalledExtensionState(
                 guid = guid,
@@ -628,10 +637,11 @@ class ExtensionRepository(
                 enabled = true,
                 source = "Bundled",
                 permissionsSnapshot = "http://*/*, https://*/*",
-                xpiPath = xpi.absolutePath,
+                xpiPath = null,
                 installedAt = System.currentTimeMillis()
             )
         )
+        Log.i(TAG, "AO3 Translator installed via ensureBuiltIn: ${installedExtension.id}")
     }
 
     private fun WebExtension.toInstalledState(
