@@ -54,7 +54,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.anglesgirl.ao3reader.HyperBrowserApp
 import com.anglesgirl.ao3reader.R
-import com.anglesgirl.ao3reader.analytics.Analytics
 import com.anglesgirl.ao3reader.browser.BrowserDownloadEntry
 import com.anglesgirl.ao3reader.browser.DownloadHandler
 import com.anglesgirl.ao3reader.browser.DownloadStatus
@@ -1124,15 +1123,9 @@ private fun BrowserScreen(
                 state?.let { profileStore.saveTabSessionState(tabId, it) }
             },
             defaultWebsiteDisplayMode = { profileStore.observeSettings().value.websiteDisplayMode },
-            onPageStop = { s, ok ->
-                if (ok) {
+            onPageStop = { success ->
+                if (success) {
                     thumbnailRefreshRequests.tryEmit(tabId)
-                    runCatching {
-                        val uri = s.currentUri?.toString().orEmpty()
-                        if (uri.contains("archiveofourown.org")) {
-                            Analytics.track("ao3_open", mapOf("url" to uri.take(200)))
-                        }
-                    }
                 }
             }
         ).also { tab ->
@@ -1572,16 +1565,10 @@ private fun BrowserScreen(
                 }
             },
             defaultWebsiteDisplayMode = { profileStore.observeSettings().value.websiteDisplayMode },
-            onPageStop = { s, ok ->
+            onPageStop = { success ->
                 val tabId = createdTab?.id
-                if (ok && tabId != null) {
+                if (success && tabId != null) {
                     thumbnailRefreshRequests.tryEmit(tabId)
-                    runCatching {
-                        val uri = s.currentUri?.toString().orEmpty()
-                        if (uri.contains("archiveofourown.org")) {
-                            Analytics.track("ao3_open", mapOf("url" to uri.take(200)))
-                        }
-                    }
                 }
             }
         )

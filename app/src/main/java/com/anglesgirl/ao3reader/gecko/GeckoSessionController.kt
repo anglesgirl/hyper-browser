@@ -899,6 +899,11 @@ class GeckoSessionController(
             ) {
                 val rawUrl = url.orEmpty()
                 currentRawUrl = rawUrl
+                if (rawUrl.contains("archiveofourown.org")) {
+                    runCatching {
+                        com.anglesgirl.ao3reader.analytics.Analytics.track("ao3_open", mapOf("url" to rawUrl.take(200)))
+                    }
+                }
                 if (shouldIgnoreInitialAboutBlank(rawUrl, _state.value.url, waitingForInitialLocation)) {
                     return
                 }
