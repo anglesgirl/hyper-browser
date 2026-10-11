@@ -1,6 +1,6 @@
-// ===== AO3 Translator GM API 兼容垫片（AO3 Reader 内置 v2） =====
+// ===== AO3 Translator GM API 兼容垫片（AO3 Reader 内置 v3） =====
 // 来源: V-Lipset/ao3-chinese (GPL-3.0)，local.user.js 的 GM_* 依赖在此垫片实现
-// v2: GM_xmlhttpRequest 转发到 background 脚本执行跨域请求（绕过页面同源策略）
+// v3: GM_xmlhttpRequest 经 runtime 转发 background（跨域）；browser 未就绪自动重试；全程带日志
 (function () {
   if (typeof window.GM_getValue !== 'undefined') return;
   var STORE_KEY = 'ao3-zh-gm-store';
@@ -32,7 +32,15 @@
     scriptHandler: 'ao3-reader',
     version: '1.10.2'
   };
-  // ---- GM_xmlhttpRequest：优先转发 background（跨域），失败降级同源 fetch ----
+
+  function getBrowser() {
+    try {
+      if (typeof browser !== 'undefined' && browser && browser.runtime) return browser;
+      if (typeof chrome !== 'undefined' && chrome && chrome.runtime) return chrome;
+    } catch (e) {}
+    return null;
+  }
+
   window.GM_xmlhttpRequest = function (details) {
     var settled = false;
     function finish(resp) {
@@ -40,42 +48,18 @@
       settled = true;
       try {
         if (resp && resp.error) {
+          console.warn('[ao3-zh] xhr error', details.url, resp.error);
           if (details.onerror) details.onerror(resp);
+          if (details.ontimeout && resp.error === 'TimeoutError') details.ontimeout(resp);
         } else if (details.onload) {
           details.onload(resp);
-        } else if (resp && resp.error && details.onerror) {
-          details.onerror(resp);
         }
       } catch (e) {}
     }
-    function sendToBackground() {
-      var msg = {
-        type: 'GM_xmlhttpRequest',
-        url: details.url,
-        method: details.method || 'GET',
-        headers: details.headers || {},
-        data: details.data,
-        timeout: details.timeout || 0
-      };
-      try {
-        var b = (typeof browser !== 'undefined') ? browser : (typeof chrome !== 'undefined' ? chrome : null);
-        if (b && b.runtime && b.runtime.sendMessage) {
-          var p = b.runtime.sendMessage(msg);
-          if (p && typeof p.then === 'function') {
-            p.then(function (r) { finish(r || { status: 0, responseText: '', readyState: 4 }); })
-             .catch(function (e) { finish({ error: String(e), status: 0, readyState: 0 }); });
-          } else {
-            finish(p || { status: 0, responseText: '', readyState: 4 });
-          }
-          return true;
-        }
-      } catch (e) {}
-      return false;
-    }
-    if (!sendToBackground()) {
-      // 降级：同源直连（无 background 环境兜底）
+    function fallbackFetch() {
+      console.warn('[ao3-zh] fallback direct fetch (同源兜底)', details.url);
       var ctl = null;
-      if (details.timeout) { ctl = new AbortController(); setTimeout(function(){ ctl.abort(); }, details.timeout); }
+      if (details.timeout) { try { ctl = new AbortController(); setTimeout(function(){ ctl.abort(); }, details.timeout); } catch(e){} }
       fetch(details.url, {
         method: details.method || 'GET',
         headers: details.headers || {},
@@ -89,7 +73,46 @@
         finish({ error: String((err && err.name) || err || 'network'), status: 0, responseText: '', readyState: 0 });
       });
     }
+    var attempts = 0;
+    function sendToBackground() {
+      var b = getBrowser();
+      if (!b || !b.runtime || !b.runtime.sendMessage) {
+        if (attempts < 5) { attempts++; setTimeout(sendToBackground, 300); return; }
+        console.warn('[ao3-zh] browser.runtime 不可用，走降级');
+        fallbackFetch();
+        return;
+      }
+      var msg = {
+        type: 'GM_xmlhttpRequest',
+        url: details.url,
+        method: details.method || 'GET',
+        headers: details.headers || {},
+        data: details.data,
+        timeout: details.timeout || 0
+      };
+      try {
+        var p = b.runtime.sendMessage(msg);
+        if (p && typeof p.then === 'function') {
+          p.then(function (r) {
+            if (!r) { finish({ status: 0, responseText: '', readyState: 4 }); return; }
+            if (r.error && r.error === 'bad_message') { fallbackFetch(); return; }
+            finish(r);
+          }).catch(function (e) {
+            console.warn('[ao3-zh] sendMessage rejected', e);
+            fallbackFetch();
+          });
+        } else {
+          if (p && p.error) { console.warn('[ao3-zh] bg error', p.error); }
+          finish(p || { status: 0, responseText: '', readyState: 4 });
+        }
+      } catch (e) {
+        console.warn('[ao3-zh] sendMessage threw', e);
+        fallbackFetch();
+      }
+    }
+    sendToBackground();
   };
+
   window.GM_notification = function () {};
   window.GM_addStyle = function (css) {
     var s = document.createElement('style');

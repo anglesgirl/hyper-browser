@@ -105,11 +105,6 @@ internal fun BrowserMenuPanel(
             onToggleBookmark = onToggleBookmark
         )
         MenuGroupBox {
-            BrowserMenuRow(
-                label = if (webAppInstalled) stringResource(R.string.menu_uninstall_webapp) else stringResource(R.string.menu_install_webapp),
-                leadingIconVector = if (webAppInstalled) Icons.Outlined.Delete else Icons.AutoMirrored.Outlined.AddToHomeScreen,
-                onClick = onInstall
-            )
             if (websiteDisplayModeAvailable) {
                 DisplayModeMenuRow(
                     websiteDisplayMode = websiteDisplayMode,
