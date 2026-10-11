@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.anglesgirl.ao3reader.HyperBrowserApp
 import com.anglesgirl.ao3reader.R
+import com.anglesgirl.ao3reader.analytics.Analytics
 import com.anglesgirl.ao3reader.browser.BrowserDownloadEntry
 import com.anglesgirl.ao3reader.browser.DownloadHandler
 import com.anglesgirl.ao3reader.browser.DownloadStatus
@@ -145,6 +146,8 @@ class BrowserActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Analytics.init(this)
+        Analytics.track("app_open")
         consumeWebNotificationIntent(intent)
         // 首启自动安装随包内置的 AO3 Translator 扩展（标准 WebExtension 通道，可管理可开关）
         lifecycleScope.launch {
@@ -1124,6 +1127,12 @@ private fun BrowserScreen(
             onPageStop = { success ->
                 if (success) {
                     thumbnailRefreshRequests.tryEmit(tabId)
+                    runCatching {
+                        val uri = session.currentUri?.toString().orEmpty()
+                        if (uri.contains("archiveofourown.org")) {
+                            Analytics.track("ao3_open", mapOf("url" to uri.take(200)))
+                        }
+                    }
                 }
             }
         ).also { tab ->
@@ -1567,6 +1576,12 @@ private fun BrowserScreen(
                 val tabId = createdTab?.id
                 if (success && tabId != null) {
                     thumbnailRefreshRequests.tryEmit(tabId)
+                    runCatching {
+                        val uri = session.currentUri?.toString().orEmpty()
+                        if (uri.contains("archiveofourown.org")) {
+                            Analytics.track("ao3_open", mapOf("url" to uri.take(200)))
+                        }
+                    }
                 }
             }
         )

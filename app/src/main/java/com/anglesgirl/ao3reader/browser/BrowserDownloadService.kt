@@ -213,6 +213,13 @@ class BrowserDownloadService : Service() {
                 WebExtensionDownloadRegistry.update(it)
                 publishFinal(it)
             }
+            runCatching {
+                val type = savedUri.toString().substringAfterLast('.', "").lowercase()
+                com.anglesgirl.ao3reader.analytics.Analytics.track(
+                    "download_complete",
+                    mapOf("type" to type, "bytes" to normalizedTotal, "source" to entry.sourceUrl.take(100))
+                )
+            }
         }.getOrElse { throwable ->
             savedUri?.let { runCatching { contentResolver.delete(it, null, null) } }
             throw throwable

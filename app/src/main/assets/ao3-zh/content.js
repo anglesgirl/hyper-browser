@@ -32088,3 +32088,83 @@ const I18N = {
   } catch (e) {}
   setTimeout(scan, 1500); // 懒加载图再扫一次
 })();
+
+;(function () {
+  // ===== AO3 阅读页黑暗模式（只做阅读页深色） =====
+  function isA03Page() {
+    try { return location.hostname === 'archiveofourown.org' || location.hostname.endsWith('.archiveofourown.org'); } catch (e) { return false; }
+  }
+  if (!isA03Page()) return;
+
+  var STYLE_ID = 'ao3-dark-style';
+  var darkCSS = [
+    'html.ao3-dark, html.ao3-dark body { background: #121212 !important; color: #d6d6d6 !important; }',
+    'html.ao3-dark #outer-wrapper, html.ao3-dark #main, html.ao3-dark #workskin, html.ao3-dark .workskin { background: #121212 !important; color: #d6d6d6; }',
+    'html.ao3-dark .userstuff, html.ao3-dark .userstuff p, html.ao3-dark .userstuff li, html.ao3-dark .userstuff div { color: #d6d6d6; }',
+    'html.ao3-dark .userstuff blockquote, html.ao3-dark blockquote.userstuff { background: #1a1a1a !important; border-color: #333 !important; color: #d6d6d6 !important; }',
+    'html.ao3-dark h1, html.ao3-dark h2, html.ao3-dark h3, html.ao3-dark h4, html.ao3-dark .heading, html.ao3-dark .heading a { color: #f0f0f0 !important; }',
+    'html.ao3-dark a { color: #7db4e8 !important; }',
+    'html.ao3-dark .meta, html.ao3-dark dl.meta, html.ao3-dark .chapter-meta, html.ao3-dark .summary, html.ao3-dark .notice { color: #a8a8a8 !important; }',
+    'html.ao3-dark .meta a, html.ao3-dark dl.meta a { color: #7db4e8 !important; }',
+    'html.ao3-dark pre, html.ao3-dark code { background: #1a1a1a !important; color: #d6d6d6 !important; }',
+    'html.ao3-dark .toc, html.ao3-dark .chapter, html.ao3-dark #chapters, html.ao3-dark div.work { background: transparent !important; }',
+    'html.ao3-dark #header, html.ao3-dark #main { background: transparent !important; }',
+    'html.ao3-dark .primary, html.ao3-dark .secondary, html.ao3-dark .menu { background: #1c1c1c !important; }',
+    'html.ao3-dark .primary a, html.ao3-dark .secondary a { color: #d6d6d6 !important; }',
+    'html.ao3-dark input, html.ao3-dark select, html.ao3-dark textarea, html.ao3-dark button { background: #1f1f1f !important; color: #d6d6d6 !important; border-color: #3a3a3a !important; }',
+    'html.ao3-dark .work.blurb, html.ao3-dark .blurb, html.ao3-dark .work { background: #1a1a1a !important; border-color: #2a2a2a !important; color: #d6d6d6 !important; }',
+    'html.ao3-dark hr { border-color: #333 !important; }',
+    'html.ao3-dark .userstuff .bookmark, html.ao3-dark .bookmark { background: #1a1a1a !important; }',
+    'html.ao3-dark .actions a, html.ao3-dark .action { color: #7db4e8 !important; }',
+    'html.ao3-dark img { opacity: 0.92; }',
+    'html.ao3-dark #ao3-dark-fab { background: rgba(30,30,30,0.92); color: #e8e8e8; }'
+  ].join('\n');
+
+  function applyDark(on) {
+    try {
+      if (on) {
+        if (!document.getElementById(STYLE_ID)) {
+          var st = document.createElement('style');
+          st.id = STYLE_ID;
+          st.textContent = darkCSS;
+          (document.head || document.documentElement).appendChild(st);
+        }
+        document.documentElement.classList.add('ao3-dark');
+      } else {
+        var el = document.getElementById(STYLE_ID);
+        if (el) el.remove();
+        document.documentElement.classList.remove('ao3-dark');
+      }
+    } catch (e) {}
+  }
+
+  function currentDark() {
+    try { return window.GM_getValue('dark_mode', false) === true; } catch (e) { return false; }
+  }
+
+  function ensureFab() {
+    try {
+      if (document.getElementById('ao3-dark-fab')) return;
+      var fab = document.createElement('button');
+      fab.id = 'ao3-dark-fab';
+      fab.type = 'button';
+      fab.title = '夜间模式';
+      fab.setAttribute('aria-label', '夜间模式');
+      fab.style.cssText = 'position:fixed;bottom:96px;right:14px;z-index:2147483000;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.4);';
+      fab.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+      fab.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var next = !currentDark();
+        try { window.GM_setValue('dark_mode', next); } catch (e) {}
+        applyDark(next);
+      });
+      (document.body || document.documentElement).appendChild(fab);
+    } catch (e) {}
+  }
+
+  applyDark(currentDark());
+  ensureFab();
+  // 页面跳转/动态渲染后再挂一次
+  setTimeout(function () { applyDark(currentDark()); ensureFab(); }, 800);
+})();

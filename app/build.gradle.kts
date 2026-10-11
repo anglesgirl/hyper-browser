@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 fun pnpmCommand(vararg args: String): List<String> {
@@ -80,6 +81,10 @@ kotlin {
 }
 
 dependencies {
+    // Firebase Analytics（与 CO3 同一项目 ao3app-a00a3，同一份 GA4 数据）
+    implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
+    implementation("com.google.firebase:firebase-analytics")
+
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.foundation:foundation")
