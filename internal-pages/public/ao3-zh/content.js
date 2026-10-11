@@ -32130,8 +32130,8 @@ const I18N = {
       fab.type = 'button';
       fab.title = '夜间模式';
       fab.setAttribute('aria-label', '夜间模式');
-      fab.style.cssText = 'position:fixed;bottom:96px;right:14px;z-index:2147483000;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.4);';
-      fab.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+      fab.style.cssText = 'position:fixed;bottom:96px;right:8px;z-index:2147483000;width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;line-height:1;cursor:pointer;background:rgba(30,30,30,0.5);box-shadow:0 1px 4px rgba(0,0,0,0.3);opacity:0.7;transition:opacity 0.2s;';
+      fab.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
       fab.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
