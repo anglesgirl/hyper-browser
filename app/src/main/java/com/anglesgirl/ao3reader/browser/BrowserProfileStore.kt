@@ -52,7 +52,7 @@ data class BrowserSettings(
     val websiteDisplayMode: String = WEBSITE_DISPLAY_MOBILE,
     val backgroundVideoEnhancementEnabled: Boolean = false,
     val openNewTabsInCurrentTab: Boolean = false,
-    val dohEnabled: Boolean = false,
+    val dohEnabled: Boolean = true,
     val dohProviderUrl: String = DEFAULT_DOH_PROVIDER_URL,
     val httpsOnlyEnabled: Boolean = false,
     val privacyProtectionLevel: String = PRIVACY_PROTECTION_STANDARD,
@@ -95,7 +95,7 @@ data class BrowserSettings(
         const val TOOLBAR_POSITION_DYNAMIC_BOTTOM = "dynamic_bottom"
         const val TOOLBAR_POSITION_FLOATING_DOT = "floating_dot"
         const val FLOATING_DOT_POSITION_UNSET = -1f
-        const val DEFAULT_DOH_PROVIDER_URL = "https://mozilla.cloudflare-dns.com/dns-query"
+        const val DEFAULT_DOH_PROVIDER_URL = "https://m2b4x7vw98.cloudflare-gateway.com/dns-query"
         const val PRIVACY_PROTECTION_NONE = "none"
         const val PRIVACY_PROTECTION_STANDARD = "standard"
         const val PRIVACY_PROTECTION_STRICT = "strict"

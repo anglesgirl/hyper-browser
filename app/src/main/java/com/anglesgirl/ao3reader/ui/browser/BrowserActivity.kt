@@ -150,7 +150,7 @@ class BrowserActivity : ComponentActivity() {
         val initialUrl = if (initialIntent?.download == false && initialIntent.url != null) {
             initialIntent.url
         } else {
-            GeckoSessionController.HOME_URL
+            GeckoSessionController.DEFAULT_HOME_URL
         }
         setContent {
             val app = application as HyperBrowserApp
