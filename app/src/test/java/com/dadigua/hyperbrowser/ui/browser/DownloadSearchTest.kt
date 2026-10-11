@@ -74,15 +74,15 @@ class DownloadSearchTest {
 
         assertEquals(
             listOf("queued", "running"),
-            filterDownloads(downloads, "", DownloadStatusFilter.Active, labels).map { it.id }
+            filterDownloads(downloads, "", DownloadStatusFilter.Active, DownloadTypeFilter.All, labels).map { it.id }
         )
         assertEquals(
             listOf("complete"),
-            filterDownloads(downloads, "", DownloadStatusFilter.Completed, labels).map { it.id }
+            filterDownloads(downloads, "", DownloadStatusFilter.Completed, DownloadTypeFilter.All, labels).map { it.id }
         )
         assertEquals(
             listOf("failed", "canceled"),
-            filterDownloads(downloads, "", DownloadStatusFilter.FailedOrCanceled, labels).map { it.id }
+            filterDownloads(downloads, "", DownloadStatusFilter.FailedOrCanceled, DownloadTypeFilter.All, labels).map { it.id }
         )
     }
 
@@ -127,7 +127,7 @@ class DownloadSearchTest {
 
         assertEquals(
             listOf("failed-notes"),
-            filterDownloads(downloads, "notes", DownloadStatusFilter.FailedOrCanceled, labels).map { it.id }
+            filterDownloads(downloads, "notes", DownloadStatusFilter.FailedOrCanceled, DownloadTypeFilter.All, labels).map { it.id }
         )
     }
 
