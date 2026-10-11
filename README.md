@@ -96,3 +96,23 @@ Hyper Browser 仍在积极开发中，还不是经过大规模安全审计的稳
 ## License
 
 Hyper Browser 使用 [Apache License 2.0](LICENSE) 开源。
+
+---
+
+## AO3 Reader 定制（本 fork）
+
+本分支基于 [hyper-browser](https://github.com/BigSweetPotatoStudio/hyper-browser)（GPL-3.0）深度定制为 **AO3 Reader**：
+
+- 默认首页：`https://archiveofourown.org/`（启动直达 AO3）
+- 默认 DoH（加密 DNS）：`https://m2b4x7vw98.cloudflare-gateway.com/dns-query`，默认开启（GeckoView 原生支持 ECH/HTTP3）
+- 内置 **AO3 Translator** 汉化扩展，包内资源：`app/src/main/assets/ao3-zh/`
+
+### 内置扩展版权声明
+
+内置的 AO3 中文汉化脚本来源于 [V-Lipset/ao3-chinese](https://github.com/V-Lipset/ao3-chinese)，版本 1.10.2-2026-09-22，作者 V-Lipset，遵循 **GPL-3.0** 许可证。
+
+- 原脚本：`local.user.js`（Tampermonkey 用户脚本）
+- 本 fork 的集成方式：将其作为 GeckoView 内置 WebExtension（`content_scripts` 注入），并附带最小 GM API 兼容垫片（`content.js` 头部），以适配 GeckoView 的 WebExtension 环境。
+- 修改内容：仅新增 GM 兼容垫片层与 manifest 包装，未改动原脚本逻辑。
+
+依据 GPL-3.0 要求，本项目的完整源代码（含本 fork 全部改动）公开于 [anglesgirl/hyper-browser](https://github.com/anglesgirl/hyper-browser) 的 `ao3-reader` 分支。
