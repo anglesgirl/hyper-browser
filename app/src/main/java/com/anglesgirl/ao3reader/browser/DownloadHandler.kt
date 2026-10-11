@@ -60,6 +60,16 @@ class DownloadHandler(context: Context, private val store: DownloadStore) {
         }
     }
 
+    fun shareIntent(entry: BrowserDownloadEntry): Intent? {
+        if (entry.status != DownloadStatus.Completed) return null
+        val uri = entry.contentUri?.let(Uri::parse) ?: return null
+        return Intent(Intent.ACTION_SEND).apply {
+            type = appContext.contentResolver.getType(uri) ?: "*/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
     suspend fun retry(entry: BrowserDownloadEntry): BrowserDownloadEntry = withContext(Dispatchers.IO) {
         if (entry.status != DownloadStatus.Failed && entry.status != DownloadStatus.Canceled) {
             return@withContext entry

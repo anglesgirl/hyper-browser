@@ -2037,6 +2037,16 @@ private fun BrowserScreen(
                 DownloadsPage(
                     downloads = listOfNotNull(updateDownloadEntry) + downloads,
                     onBack = ::closePanel,
+                    onShare = { entry ->
+                        val shareIntent = downloadHandler.shareIntent(entry)
+                        if (shareIntent == null) {
+                            message = context.getString(R.string.download_file_not_ready)
+                        } else {
+                            runCatching {
+                                activity.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.download_share_chooser_title)))
+                            }.onFailure { message = it.message ?: context.getString(R.string.download_file_share_failed) }
+                        }
+                    },
                     onOpen = { entry ->
                         if (entry.id == AppUpdateManager.APP_UPDATE_DOWNLOAD_ID) {
                             scope.launch {

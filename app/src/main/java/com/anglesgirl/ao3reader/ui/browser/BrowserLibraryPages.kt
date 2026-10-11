@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -116,6 +117,30 @@ internal enum class DownloadStatusFilter {
     Completed,
     FailedOrCanceled
 }
+
+internal enum class DownloadTypeFilter {
+    All,
+    Epub,
+    Mobi,
+    Pdf,
+    Other
+}
+
+internal fun downloadFileType(entry: BrowserDownloadEntry): DownloadTypeFilter {
+    val ext = entry.name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    return when (ext) {
+        "epub" -> DownloadTypeFilter.Epub
+        "mobi" -> DownloadTypeFilter.Mobi
+        "pdf" -> DownloadTypeFilter.Pdf
+        else -> DownloadTypeFilter.Other
+    }
+}
+
+internal fun downloadMatchesTypeFilter(
+    entry: BrowserDownloadEntry,
+    typeFilter: DownloadTypeFilter
+): Boolean =
+    typeFilter == DownloadTypeFilter.All || downloadFileType(entry) == typeFilter
 
 @Composable
 internal fun BookmarksPage(
@@ -362,6 +387,7 @@ internal fun DownloadsPage(
     downloads: List<BrowserDownloadEntry>,
     onBack: () -> Unit,
     onOpen: (BrowserDownloadEntry) -> Unit,
+    onShare: (BrowserDownloadEntry) -> Unit,
     onRetry: (BrowserDownloadEntry) -> Unit,
     onCancel: (BrowserDownloadEntry) -> Unit,
     onRemove: (BrowserDownloadEntry, Boolean) -> Unit,
@@ -377,6 +403,7 @@ internal fun DownloadsPage(
     val orderedDownloads = remember(downloads) { downloads.sortedByDescending { it.createdAt } }
     var query by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf(DownloadStatusFilter.All) }
+    var typeFilter by remember { mutableStateOf(DownloadTypeFilter.All) }
     val downloadMetaLabels = DownloadMetaLabels(
         queued = stringResource(R.string.download_status_queued),
         downloading = stringResource(R.string.download_status_downloading),
@@ -386,8 +413,8 @@ internal fun DownloadsPage(
         unknownSize = stringResource(R.string.download_unknown_size),
         unknown = stringResource(R.string.download_unknown)
     )
-    val visibleDownloads = remember(orderedDownloads, query, statusFilter, downloadMetaLabels) {
-        filterDownloads(orderedDownloads, query, statusFilter, downloadMetaLabels)
+    val visibleDownloads = remember(orderedDownloads, query, statusFilter, typeFilter, downloadMetaLabels) {
+        filterDownloads(orderedDownloads, query, statusFilter, typeFilter, downloadMetaLabels)
     }
     val clearableCount = orderedDownloads.count {
         canClear(it) &&
@@ -459,6 +486,10 @@ internal fun DownloadsPage(
                     selectedFilter = statusFilter,
                     onFilterSelected = { statusFilter = it }
                 )
+                DownloadTypeFilterRow(
+                    selectedFilter = typeFilter,
+                    onFilterSelected = { typeFilter = it }
+                )
                 if (visibleDownloads.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -496,6 +527,11 @@ internal fun DownloadsPage(
                                         )
                                     }
                                     Toast.makeText(context, context.getString(R.string.library_downloads_url_copied), Toast.LENGTH_SHORT).show()
+                                },
+                                onShare = if (entry.status == DownloadStatus.Completed) {
+                                    { onShare(entry) }
+                                } else {
+                                    null
                                 },
                                 onRemove = {
                                     pendingDelete = entry
@@ -603,6 +639,7 @@ private fun DownloadRow(
     downloadMetaLabels: DownloadMetaLabels,
     onOpen: () -> Unit,
     onCopyUrl: () -> Unit,
+    onShare: (() -> Unit)?,
     onRemove: () -> Unit,
     onRetry: (() -> Unit)?,
     onCancel: (() -> Unit)?
@@ -660,6 +697,11 @@ private fun DownloadRow(
                 Text(stringResource(R.string.common_action_cancel))
             }
         }
+        if (onShare != null) {
+            IconButton(onClick = onShare) {
+                Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.library_downloads_share_content_description))
+            }
+        }
         IconButton(onClick = onRemove) {
             Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.library_downloads_remove_content_description))
         }
@@ -676,6 +718,36 @@ private fun DownloadStatusFilterRow(
         DownloadStatusFilter.Active to stringResource(R.string.library_downloads_filter_active),
         DownloadStatusFilter.Completed to stringResource(R.string.library_downloads_filter_completed),
         DownloadStatusFilter.FailedOrCanceled to stringResource(R.string.library_downloads_filter_failed_canceled)
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        labels.forEach { (filter, label) ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(label) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DownloadTypeFilterRow(
+    selectedFilter: DownloadTypeFilter,
+    onFilterSelected: (DownloadTypeFilter) -> Unit
+) {
+    val labels = listOf(
+        DownloadTypeFilter.All to stringResource(R.string.library_downloads_filter_all),
+        DownloadTypeFilter.Epub to "EPUB",
+        DownloadTypeFilter.Mobi to "MOBI",
+        DownloadTypeFilter.Pdf to "PDF",
+        DownloadTypeFilter.Other to stringResource(R.string.library_downloads_filter_other)
     )
     Row(
         modifier = Modifier
@@ -1186,10 +1258,12 @@ internal fun filterDownloads(
     items: List<BrowserDownloadEntry>,
     query: String,
     statusFilter: DownloadStatusFilter,
+    typeFilter: DownloadTypeFilter,
     labels: DownloadMetaLabels
 ): List<BrowserDownloadEntry> =
     items.filter { entry ->
         downloadMatchesStatusFilter(entry, statusFilter) &&
+            downloadMatchesTypeFilter(entry, typeFilter) &&
             downloadMatchesQuery(entry, query, labels)
     }
 

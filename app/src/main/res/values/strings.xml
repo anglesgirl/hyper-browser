@@ -113,6 +113,7 @@
     <string name="library_downloads_filter_active">Active</string>
     <string name="library_downloads_filter_completed">Complete</string>
     <string name="library_downloads_filter_failed_canceled">Failed/canceled</string>
+    <string name="library_downloads_filter_other">Other</string>
     <string name="library_downloads_no_matches">No matching downloads.</string>
     <string name="library_downloads_url_copied">Download address copied</string>
     <string name="library_downloads_delete_title">Delete download</string>
@@ -123,6 +124,7 @@
     <string name="library_downloads_clear_message">Remove completed, failed, and canceled downloads from the list without deleting saved files. Active downloads are kept.</string>
     <string name="library_downloads_clear_action">Clear</string>
     <string name="library_downloads_remove_content_description">Remove download</string>
+    <string name="library_downloads_share_content_description">Share download</string>
     <string name="library_downloads_cleared_count">Cleared %1$d download records.</string>
     <string name="library_downloads_none_to_clear">No finished downloads to clear.</string>
     <string name="library_downloads_clear_failed">Unable to clear download records.</string>
@@ -142,6 +144,8 @@
     <string name="download_canceled">Download canceled.</string>
     <string name="download_cancel_failed">Unable to cancel download.</string>
     <string name="download_file_not_ready">File is not ready.</string>
+    <string name="download_file_share_failed">Failed to share file</string>
+    <string name="download_share_chooser_title">Share download</string>
     <string name="download_file_open_failed">No app can open this file.</string>
     <string name="browser_toast_unable_open_link">Unable to open link.</string>
     <string name="menu_new_tab">New tab</string>
