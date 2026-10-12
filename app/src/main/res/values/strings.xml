@@ -286,6 +286,15 @@
     <string name="settings_doh_https_required">DNS over HTTPS address must start with https://.</string>
     <string name="settings_doh_bootstrap">Bootstrap IP (optional)</string>
     <string name="settings_doh_bootstrap_hint">e.g. 1.1.1.1 — bypasses system DNS for the DoH hostname</string>
+    <string name="settings_doh_scan">Scan available IPs</string>
+    <string name="settings_doh_scan_title">Scan available IPs</string>
+    <string name="settings_doh_scan_prefix">IP prefix</string>
+    <string name="settings_doh_scan_start">Scan</string>
+    <string name="settings_doh_scan_progress">Scanning… can take up to ~30s</string>
+    <string name="settings_doh_scan_result">Tap an IP to fill it in:</string>
+    <string name="settings_doh_scan_hint">Enter a prefix such as 172.64.229, then tap Scan.</string>
+    <string name="settings_doh_scan_none">No reachable IPs found.</string>
+    <string name="common_action_close">Close</string>
     <string name="settings_https_only_help">Prefer secure HTTPS connections when possible.</string>
     <string name="settings_privacy">Privacy protection</string>
     <string name="settings_privacy_none">None</string>

@@ -286,6 +286,15 @@
     <string name="settings_doh_https_required">DNS over HTTPS 地址必须以 https:// 开头。</string>
     <string name="settings_doh_bootstrap">Bootstrap IP（可选）</string>
     <string name="settings_doh_bootstrap_hint">例如 1.1.1.1 — 跳过系统 DNS 直接解析 DoH 域名</string>
+    <string name="settings_doh_scan">扫描可用 IP</string>
+    <string name="settings_doh_scan_title">扫描可用 IP</string>
+    <string name="settings_doh_scan_prefix">IP 段前缀</string>
+    <string name="settings_doh_scan_start">开始扫描</string>
+    <string name="settings_doh_scan_progress">扫描中，最多约 30 秒…</string>
+    <string name="settings_doh_scan_result">点击 IP 填入：</string>
+    <string name="settings_doh_scan_hint">输入前缀（如 172.64.229）后点开始扫描。</string>
+    <string name="settings_doh_scan_none">没有找到可用 IP。</string>
+    <string name="common_action_close">关闭</string>
     <string name="settings_https_only_help">尽可能优先使用安全 HTTPS 连接。</string>
     <string name="settings_privacy">隐私保护</string>
     <string name="settings_privacy_none">无</string>

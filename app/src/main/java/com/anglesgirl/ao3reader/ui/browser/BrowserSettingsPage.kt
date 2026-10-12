@@ -10,14 +10,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,8 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.anglesgirl.ao3reader.R
 import com.anglesgirl.ao3reader.browser.BrowserSettings
+import com.anglesgirl.ao3reader.browser.IpResult
+import com.anglesgirl.ao3reader.browser.IpScanner
 import com.anglesgirl.ao3reader.update.AvailableUpdate
 import com.anglesgirl.ao3reader.update.UpdateDownloadState
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun SettingsPage(
@@ -94,6 +102,14 @@ internal fun SettingsPage(
     var dohDraft by remember(settings.dohProviderUrl) { mutableStateOf(settings.dohProviderUrl) }
     var dohBootstrapDraft by remember(settings.dohBootstrapIp) { mutableStateOf(settings.dohBootstrapIp) }
     var dohError by remember { mutableStateOf("") }
+
+    val scanScope = rememberCoroutineScope()
+    var scanDialogOpen by remember { mutableStateOf(false) }
+    var scanPrefix by remember { mutableStateOf("172.64.229") }
+    var scanRunning by remember { mutableStateOf(false) }
+    var scanResults by remember { mutableStateOf<List<IpResult>>(emptyList()) }
+    var scanError by remember { mutableStateOf("") }
+    val scanNoneMsg = stringResource(R.string.settings_doh_scan_none)
 
     val customTokenError = stringResource(R.string.settings_custom_url_missing_token)
     val dohHttpsError = stringResource(R.string.settings_doh_https_required)
@@ -318,6 +334,12 @@ internal fun SettingsPage(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                             )
+                            TextButton(
+                                onClick = { scanDialogOpen = true },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            ) {
+                                Text(stringResource(R.string.settings_doh_scan))
+                            }
                             SettingsActions {
                                 TextButton(onClick = { updatePrivacy(dohProviderUrl = dohDraft, dohBootstrapIp = dohBootstrapDraft) }) {
                                     Text(stringResource(R.string.common_action_save))
@@ -452,6 +474,33 @@ internal fun SettingsPage(
                     }
                 }
                 item { Spacer(modifier = Modifier.height(36.dp)) }
+            }
+            if (scanDialogOpen) {
+                IpScanDialog(
+                    prefix = scanPrefix,
+                    onPrefixChange = { scanPrefix = it },
+                    running = scanRunning,
+                    results = scanResults,
+                    error = scanError,
+                    onScan = {
+                        if (!scanRunning) {
+                            scanRunning = true
+                            scanResults = emptyList()
+                            scanError = ""
+                            scanScope.launch {
+                                val res = IpScanner.scan(scanPrefix)
+                                if (res.isEmpty()) scanError = scanNoneMsg
+                                scanResults = res
+                                scanRunning = false
+                            }
+                        }
+                    },
+                    onPick = { ip ->
+                        dohBootstrapDraft = ip
+                        scanDialogOpen = false
+                    },
+                    onDismiss = { scanDialogOpen = false }
+                )
             }
         }
     }
@@ -890,4 +939,81 @@ private fun formatSettingsBytes(value: Long): String {
     if (value >= 1024L * 1024L) return "%.1f MB".format(value / 1024f / 1024f)
     if (value >= 1024L) return "%.0f KB".format(value / 1024f)
     return "$value B"
+}
+
+@Composable
+private fun IpScanDialog(
+    prefix: String,
+    onPrefixChange: (String) -> Unit,
+    running: Boolean,
+    results: List<IpResult>,
+    error: String,
+    onScan: () -> Unit,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_doh_scan_title)) },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = prefix,
+                        onValueChange = onPrefixChange,
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.settings_doh_scan_prefix)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = onScan, enabled = !running) {
+                        Text(stringResource(R.string.settings_doh_scan_start))
+                    }
+                }
+                if (running) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                    Text(
+                        stringResource(R.string.settings_doh_scan_progress),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+                if (error.isNotBlank()) {
+                    SettingsInlineMessage(error, error = true)
+                }
+                if (results.isEmpty() && !running && error.isBlank()) {
+                    Text(
+                        stringResource(R.string.settings_doh_scan_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                if (results.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.settings_doh_scan_result),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                    LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                        items(results, key = { it.ip }) { r ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPick(r.ip) }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(r.ip, modifier = Modifier.weight(1f))
+                                Text("${r.latencyMs}ms", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_close)) }
+        }
+    )
 }
