@@ -6,6 +6,10 @@ This project uses GitHub Releases for packaged APKs. The changelog should match 
 
 ## Unreleased
 
+## 2.1.0-beta.2 - 2026-10-12
+
+- Added scan available IPs for DoH Bootstrap IP: probes a /24 prefix over TCP 443 (e.g. 172.64.229.x), lists reachable IPs sorted by latency, tap an IP to fill it in.
+
 ## 2.1.0-beta.1 - 2026-07-20
 
 - Added Find in Page with previous/next match navigation and live result counts.
