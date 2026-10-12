@@ -284,6 +284,8 @@
     <string name="settings_doh_help">Encrypt DNS requests through the configured resolver.</string>
     <string name="settings_doh_address">DNS over HTTPS address</string>
     <string name="settings_doh_https_required">DNS over HTTPS address must start with https://.</string>
+    <string name="settings_doh_bootstrap">Bootstrap IP (optional)</string>
+    <string name="settings_doh_bootstrap_hint">e.g. 1.1.1.1 — bypasses system DNS for the DoH hostname</string>
     <string name="settings_https_only_help">Prefer secure HTTPS connections when possible.</string>
     <string name="settings_privacy">Privacy protection</string>
     <string name="settings_privacy_none">None</string>

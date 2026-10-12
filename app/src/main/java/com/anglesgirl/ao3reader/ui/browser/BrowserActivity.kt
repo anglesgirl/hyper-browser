@@ -805,6 +805,7 @@ private fun BrowserScreen(
                 profileStore.updatePrivacySettings(
                     dohEnabled = payload.optString("dohEnabled") == "true",
                     dohProviderUrl = payload.optString("dohProviderUrl"),
+                    dohBootstrapIp = payload.optString("dohBootstrapIp"),
                     httpsOnlyEnabled = payload.optString("httpsOnlyEnabled") == "true",
                     privacyProtectionLevel = payload.optString("privacyProtectionLevel")
                 )
@@ -1954,10 +1955,11 @@ private fun BrowserScreen(
                             activity.window.decorView.post { activity.recreate() }
                         }
                     },
-                    onUpdatePrivacySettings = { dohEnabled, dohProviderUrl, httpsOnlyEnabled, privacyProtectionLevel ->
+                    onUpdatePrivacySettings = { dohEnabled, dohProviderUrl, dohBootstrapIp, httpsOnlyEnabled, privacyProtectionLevel ->
                         profileStore.updatePrivacySettings(
                             dohEnabled = dohEnabled,
                             dohProviderUrl = dohProviderUrl,
+                            dohBootstrapIp = dohBootstrapIp,
                             httpsOnlyEnabled = httpsOnlyEnabled,
                             privacyProtectionLevel = privacyProtectionLevel
                         )

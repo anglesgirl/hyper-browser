@@ -54,6 +54,7 @@ data class BrowserSettings(
     val openNewTabsInCurrentTab: Boolean = false,
     val dohEnabled: Boolean = true,
     val dohProviderUrl: String = DEFAULT_DOH_PROVIDER_URL,
+    val dohBootstrapIp: String = "",
     val httpsOnlyEnabled: Boolean = false,
     val privacyProtectionLevel: String = PRIVACY_PROTECTION_STANDARD,
     val localePreference: String = LOCALE_DEFAULT,
@@ -425,6 +426,7 @@ class BrowserProfileStore(context: Context) {
     fun updatePrivacySettings(
         dohEnabled: Boolean,
         dohProviderUrl: String,
+        dohBootstrapIp: String,
         httpsOnlyEnabled: Boolean,
         privacyProtectionLevel: String
     ) {
@@ -432,6 +434,7 @@ class BrowserProfileStore(context: Context) {
             dohEnabled = dohEnabled,
             dohProviderUrl = dohProviderUrl.trim().takeIf { it.startsWith("https://") }
                 ?: BrowserSettings.DEFAULT_DOH_PROVIDER_URL,
+            dohBootstrapIp = dohBootstrapIp.trim(),
             httpsOnlyEnabled = httpsOnlyEnabled,
             privacyProtectionLevel = when (privacyProtectionLevel) {
                 BrowserSettings.PRIVACY_PROTECTION_NONE -> BrowserSettings.PRIVACY_PROTECTION_NONE
@@ -557,6 +560,7 @@ class BrowserProfileStore(context: Context) {
                 .put("openNewTabsInCurrentTab", settings.openNewTabsInCurrentTab)
                 .put("dohEnabled", settings.dohEnabled)
                 .put("dohProviderUrl", settings.dohProviderUrl)
+                .put("dohBootstrapIp", settings.dohBootstrapIp)
                 .put("httpsOnlyEnabled", settings.httpsOnlyEnabled)
                 .put("privacyProtectionLevel", settings.privacyProtectionLevel)
                 .put("localePreference", settings.localePreference)
@@ -732,6 +736,7 @@ class BrowserProfileStore(context: Context) {
                         "dohProviderUrl",
                         BrowserSettings.DEFAULT_DOH_PROVIDER_URL
                     ).takeIf { it.startsWith("https://") } ?: BrowserSettings.DEFAULT_DOH_PROVIDER_URL,
+                    dohBootstrapIp = item.optString("dohBootstrapIp", ""),
                     httpsOnlyEnabled = if (privacySettingsVersion > 0) {
                         item.optBoolean("httpsOnlyEnabled", false)
                     } else {

@@ -65,7 +65,7 @@ internal fun SettingsPage(
     onUpdateBackgroundVideoEnhancement: (Boolean) -> Unit,
     onUpdateOpenNewTabsInCurrentTab: (Boolean) -> Unit,
     onUpdateLocalePreference: (String) -> Unit,
-    onUpdatePrivacySettings: (dohEnabled: Boolean, dohProviderUrl: String, httpsOnlyEnabled: Boolean, privacyProtectionLevel: String) -> Unit,
+    onUpdatePrivacySettings: (dohEnabled: Boolean, dohProviderUrl: String, dohBootstrapIp: String, httpsOnlyEnabled: Boolean, privacyProtectionLevel: String) -> Unit,
     onOpenBatteryOptimizationSettings: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
@@ -92,6 +92,7 @@ internal fun SettingsPage(
     var customDraft by remember(settings.customSearchUrl) { mutableStateOf(settings.customSearchUrl) }
     var customError by remember { mutableStateOf("") }
     var dohDraft by remember(settings.dohProviderUrl) { mutableStateOf(settings.dohProviderUrl) }
+    var dohBootstrapDraft by remember(settings.dohBootstrapIp) { mutableStateOf(settings.dohBootstrapIp) }
     var dohError by remember { mutableStateOf("") }
 
     val customTokenError = stringResource(R.string.settings_custom_url_missing_token)
@@ -114,6 +115,7 @@ internal fun SettingsPage(
     fun updatePrivacy(
         dohEnabled: Boolean = settings.dohEnabled,
         dohProviderUrl: String = dohDraft,
+        dohBootstrapIp: String = dohBootstrapDraft,
         httpsOnlyEnabled: Boolean = settings.httpsOnlyEnabled,
         privacyProtectionLevel: String = settings.privacyProtectionLevel
     ) {
@@ -123,7 +125,7 @@ internal fun SettingsPage(
             return
         }
         dohError = ""
-        onUpdatePrivacySettings(dohEnabled, cleanDohUrl, httpsOnlyEnabled, privacyProtectionLevel)
+        onUpdatePrivacySettings(dohEnabled, cleanDohUrl, dohBootstrapIp.trim(), httpsOnlyEnabled, privacyProtectionLevel)
     }
 
     val sections = settingsSections(settings, ignoringBatteryOptimizations, checkedUpdate, query)
@@ -303,8 +305,21 @@ internal fun SettingsPage(
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                             SettingsInlineMessage(dohError, error = true)
+                            OutlinedTextField(
+                                value = dohBootstrapDraft,
+                                onValueChange = {
+                                    dohBootstrapDraft = it
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                label = { Text(stringResource(R.string.settings_doh_bootstrap)) },
+                                placeholder = { Text(stringResource(R.string.settings_doh_bootstrap_hint)) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
                             SettingsActions {
-                                TextButton(onClick = { updatePrivacy(dohProviderUrl = dohDraft) }) {
+                                TextButton(onClick = { updatePrivacy(dohProviderUrl = dohDraft, dohBootstrapIp = dohBootstrapDraft) }) {
                                     Text(stringResource(R.string.common_action_save))
                                 }
                             }

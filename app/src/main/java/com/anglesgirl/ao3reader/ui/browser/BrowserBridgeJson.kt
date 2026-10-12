@@ -41,6 +41,7 @@ internal fun BrowserSettings.toJson(): JSONObject =
         .put("openNewTabsInCurrentTab", openNewTabsInCurrentTab)
         .put("dohEnabled", dohEnabled)
         .put("dohProviderUrl", dohProviderUrl)
+        .put("dohBootstrapIp", dohBootstrapIp)
         .put("httpsOnlyEnabled", httpsOnlyEnabled)
         .put("privacyProtectionLevel", privacyProtectionLevel)
         .put("localePreference", localePreference)

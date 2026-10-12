@@ -212,6 +212,9 @@ object GeckoRuntimeProvider {
             }
             appendLine("  network.trr.mode: ${dohMode(settings)}")
             appendLine("  network.trr.uri: \"${settings.dohProviderUrl}\"")
+            if (settings.dohBootstrapIp.isNotBlank()) {
+                appendLine("  network.trr.bootstrapAddress: \"${settings.dohBootstrapIp}\"")
+            }
             appendLine("  doh-rollout.mode: ${dohMode(settings)}")
             appendLine("  doh-rollout.uri: \"${settings.dohProviderUrl}\"")
             appendLine("  network.dns.native_https_query: ${settings.echEnabled}")
