@@ -644,6 +644,49 @@ class ExtensionRepository(
         Log.i(TAG, "AO3 Translator installed via ensureBuiltIn")
     }
 
+    /**
+     * 安装随包内置的 movy 防盗链扩展。
+     * 为 noblekite/stormhive/zenoak 的媒体请求注入 movy.sx 的 Origin 与 Referer，
+     * 绕过分片 CDN 的来路校验，让网页播放器直连源站（零服务器代理）。
+     * 与 AO3 Translator 同机制：GeckoView ensureBuiltIn 从 assets 加载，幂等。
+     */
+    suspend fun installBundledMovyAntileech() {
+        val guid = "movy-antileech@local"
+        if (installedState.value.any { it.guid == guid }) return
+        val installedExtension = withContext(Dispatchers.Main.immediate) {
+            val controller = GeckoRuntimeProvider.get(context).webExtensionController
+            val result = runCatching {
+                controller.ensureBuiltIn("resource://android/assets/movy-antileech/", guid)
+            }.getOrElse { error ->
+                Log.e(TAG, "movy antileech ensureBuiltIn threw", error)
+                throw error
+            }
+            val ext = runCatching { withTimeout(30_000) { result.await() } }
+                .getOrElse { error ->
+                    Log.e(TAG, "movy antileech ensureBuiltIn await failed", error)
+                    throw error
+                }
+            if (ext == null) {
+                Log.e(TAG, "movy antileech ensureBuiltIn returned null")
+                throw IllegalStateException("ensureBuiltIn returned null for $guid")
+            }
+            ext
+        }
+        upsertInstalled(
+            InstalledExtensionState(
+                guid = guid,
+                name = "movy 防盗链",
+                version = "1.0.0",
+                enabled = true,
+                source = "Bundled",
+                permissionsSnapshot = "webRequest, webRequestBlocking, <all_urls>",
+                xpiPath = null,
+                installedAt = System.currentTimeMillis()
+            )
+        )
+        Log.i(TAG, "movy antileech installed via ensureBuiltIn")
+    }
+
     private fun WebExtension.toInstalledState(
         existing: InstalledExtensionState?,
         enabledOverride: Boolean? = null

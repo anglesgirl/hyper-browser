@@ -1,0 +1,20 @@
+{
+  "manifest_version": 2,
+  "name": "movy 防盗链",
+  "version": "1.0.0",
+  "description": "movy 分片来路校验绕过：为 noblekite/stormhive/zenoak 的媒体请求注入 movy.sx 的 Origin 与 Referer，网页播放器直连源站。",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "movy-antileech@local",
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  }
+}

@@ -6,6 +6,11 @@ This project uses GitHub Releases for packaged APKs. The changelog should match 
 
 ## Unreleased
 
+## 2.1.0-beta.3 - 2026-10-13
+
+- Dedicated client: default home page switched to the MoonTVPlus deployment (2btv.eu.org), app opens straight into the site.
+- Built-in movy anti-leech extension: injects movy.sx Origin/Referer on noblekite/stormhive/zenoak media requests, letting the web player fetch segments directly (no server proxy).
+
 ## 2.1.0-beta.2 - 2026-10-12
 
 - Added scan available IPs for DoH Bootstrap IP: probes a /24 prefix over TCP 443 (e.g. 172.64.229.x), lists reachable IPs sorted by latency, tap an IP to fill it in.

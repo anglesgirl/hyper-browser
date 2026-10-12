@@ -22,8 +22,8 @@ android {
         applicationId = "com.anglesgirl.ao3reader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "2.1.0-beta.2"
+        versionCode = 22
+        versionName = "2.1.0-beta.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

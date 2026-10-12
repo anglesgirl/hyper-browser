@@ -152,6 +152,8 @@ class BrowserActivity : ComponentActivity() {
         // 首启自动安装随包内置的 AO3 Translator 扩展（标准 WebExtension 通道，可管理可开关）
         lifecycleScope.launch {
             runCatching { (application as HyperBrowserApp).extensions.installBundledA03Zh() }
+            // movy 防盗链扩展：分片请求注入 movy.sx 来路，网页播放器直连
+            runCatching { (application as HyperBrowserApp).extensions.installBundledMovyAntileech() }
         }
         val initialIntent = intent.toExternalBrowserIntent()
         val initialUrl = if (initialIntent?.download == false && initialIntent.url != null) {
