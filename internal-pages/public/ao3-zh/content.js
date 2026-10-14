@@ -29824,6 +29824,15 @@ const I18N = {
 				'Works and bookmarks listed here have been added to a collection but need approval from a collection moderator before they are listed in the collection.': '此处列出的作品和书签已添加至合集中，但需经合集管理员批准后才会在合集内显示。',
 				'Successfully logged out.': '已成功登出。',
 				'Successfully logged in.': '已成功登录。',
+				// 评论回复报错（2026-10-15 补：用户反馈登录提示缺翻译时一并排查发现）
+				'Sorry, you cannot reply to a frozen comment.': '抱歉，您无法回复已冻结的评论。',
+				'Sorry, you have been blocked from commenting.': '抱歉，您已被禁止发表评论。',
+				'Your email has been successfully updated.': '您的电子邮箱已成功更新。',
+				'Sorry, this user doesn\'t allow non-Archive users to reply to their comments.': '抱歉，该用户不允许非 Archive 用户回复其评论。',
+				'Sorry, you cannot reply to a hidden comment.': '抱歉，您无法回复已隐藏的评论。',
+				'Sorry, you can\'t reply to a comment that has been marked as spam.': '抱歉，您无法回复被标记为垃圾评论的内容。',
+				'You have made too many requests in a short time period. Please wait a while before trying again. If you are receiving this error repeatedly, try browsing more slowly or loading fewer pages at a time.': '您的请求过于频繁，请稍后再试。如果反复出现此错误，请放慢浏览速度或减少同时加载的页面。',
+				'Sorry, something went wrong. Please try that again.': '抱歉，出了点问题，请重试。',
 				'Bookmark was successfully created. It should appear in bookmark listings within the next few minutes.': '书签已创建成功。它将在接下来的几分钟内出现在书签列表中。',
 				'Browse fandoms by media or favorite up to 20 tags to have them listed here!': '可按媒体浏览同人圈，或收藏最多 20 个标签以在此展示。',
 				'You can search this page by pressing': '按', 'ctrl F': ' Ctrl + F ', 'cmd F': ' Cmd + F ，', '': '', 'and typing in what you are looking for.': '输入关键词即可在本页搜索。',
@@ -30057,6 +30066,11 @@ const I18N = {
 					'div.flash.notice',
 					/^\s*Your password has been changed\. To protect your account, you have been logged out of all active sessions\. Please log in with your new password\.\s*$/s,
 					'您的密码已更改。为了保护您的账户，您已从所有活动会话中登出。请使用新密码登录。'
+				],
+				[
+					'div.flash.notice',
+					/^\s*Successfully logged in\.\s*<strong>You'll stay logged in for (\d+) weeks even if you close your browser, so make sure to log out if you're using a public or shared computer\.\s*<\/strong>\s*$/s,
+					'已成功登录。<strong>即使关闭浏览器，您在 $1 周内仍将保持登录状态。如果您使用的是公共或共享计算机，请务必登出。</strong>'
 				],
 
 				// 作品

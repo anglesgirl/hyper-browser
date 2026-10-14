@@ -178,8 +178,71 @@ class WebAppRepository(
         if (storeFile.exists()) {
             loadFromSyncFile(storeFile).sortedByDescending { it.lastOpenedAt }
         } else {
-            emptyList()
+            // 首次启动：预置用户的三个导航站，之后走正常加载路径
+            seedDefaultWebApps()
         }
+
+    /**
+     * 首次启动预置导航：博客 / 电影站 / AO3。
+     * 只在 webapps.json 完全不存在时执行一次并落盘；用户手动删除后不再补回。
+     * 图标传 null，走站点 favicon，拿不到时用首字母兜底（BrowserIconComposer）。
+     */
+    private fun seedDefaultWebApps(): List<WebAppDefinition> {
+        val now = System.currentTimeMillis()
+        val seeds = listOf(
+            WebAppDefinition(
+                id = "seed-blog",
+                name = "博客",
+                startUrl = "https://anglesya.win/",
+                iconPath = null,
+                themeColor = Color.rgb(18, 109, 106),
+                displayMode = "standalone",
+                createdAt = now,
+                lastOpenedAt = now
+            ),
+            WebAppDefinition(
+                id = "seed-movie",
+                name = "2BTV",
+                startUrl = "https://2btv.eu.org/",
+                iconPath = null,
+                themeColor = Color.rgb(18, 109, 106),
+                displayMode = "standalone",
+                createdAt = now,
+                lastOpenedAt = now - 1
+            ),
+            WebAppDefinition(
+                id = "seed-ao3",
+                name = "AO3",
+                startUrl = "https://archiveofourown.org/",
+                iconPath = null,
+                themeColor = Color.rgb(155, 0, 0),
+                displayMode = "standalone",
+                createdAt = now,
+                lastOpenedAt = now - 2
+            )
+        )
+        val appsJson = JSONObject()
+        seeds.forEach { app ->
+            appsJson.put(
+                app.id,
+                JSONObject()
+                    .put("id", app.id)
+                    .put("name", app.name)
+                    .put("startUrl", app.startUrl)
+                    .put("themeColor", app.themeColor)
+                    .put("displayMode", app.displayMode)
+                    .put("createdAt", app.createdAt)
+                    .put("lastOpenedAt", app.lastOpenedAt)
+            )
+        }
+        runCatching {
+            AtomicFileWriter.writeText(storeFile, emptyWebAppsJson().put("apps", appsJson).toString())
+            android.util.Log.i("WebAppRepository", "首次启动已预置 ${seeds.size} 个导航")
+        }.onFailure {
+            android.util.Log.w("WebAppRepository", "预置导航写入失败: ${it.message}")
+        }
+        return seeds.sortedByDescending { it.lastOpenedAt }
+    }
 
     private fun loadFromSyncFile(file: File): List<WebAppDefinition> =
         runCatching {
