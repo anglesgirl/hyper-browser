@@ -174,13 +174,85 @@ class WebAppRepository(
         return "data:image/png;base64,${Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)}"
     }
 
-    private fun load(): List<WebAppDefinition> =
-        if (storeFile.exists()) {
-            loadFromSyncFile(storeFile).sortedByDescending { it.lastOpenedAt }
-        } else {
+    private fun load(): List<WebAppDefinition> {
+        if (!storeFile.exists()) {
             // 首次启动：预置用户的三个导航站，之后走正常加载路径
-            seedDefaultWebApps()
+            return seedDefaultWebApps()
         }
+        // 存量修复：补回缺失的种子。用户手动删除的有 tombstone，不补；
+        // 缺 rev 被同步层吞掉的没有 tombstone，自动补回。
+        val root = readJSONObject(storeFile)
+        if (root != null) {
+            val appsObj = root.optJSONObject("apps") ?: JSONObject()
+            val tombstonesObj = root.optJSONObject("appTombstones") ?: JSONObject()
+            val now = System.currentTimeMillis()
+            var changed = false
+            seedDefinitions(now).forEach { seed ->
+                if (!appsObj.has(seed.id) && !tombstonesObj.has(seed.id)) {
+                    appsObj.put(seed.id, seedToJson(seed, now))
+                    changed = true
+                    android.util.Log.i("WebAppRepository", "补回缺失的预置导航: ${seed.name}")
+                }
+            }
+            if (changed) {
+                root.put("apps", appsObj)
+                runCatching {
+                    AtomicFileWriter.writeText(storeFile, root.toString())
+                }.onFailure {
+                    android.util.Log.w("WebAppRepository", "补回预置导航写入失败: ${it.message}")
+                }
+            }
+        }
+        return loadFromSyncFile(storeFile).sortedByDescending { it.lastOpenedAt }
+    }
+
+    private fun seedDefinitions(now: Long): List<WebAppDefinition> = listOf(
+        WebAppDefinition(
+            id = "seed-blog",
+            name = "博客",
+            startUrl = "https://anglesya.win/",
+            iconPath = null,
+            themeColor = Color.rgb(18, 109, 106),
+            displayMode = "standalone",
+            createdAt = now,
+            lastOpenedAt = now
+        ),
+        WebAppDefinition(
+            id = "seed-movie",
+            name = "2BTV",
+            startUrl = "https://2btv.eu.org/",
+            iconPath = null,
+            themeColor = Color.rgb(18, 109, 106),
+            displayMode = "standalone",
+            createdAt = now,
+            lastOpenedAt = now - 1
+        ),
+        WebAppDefinition(
+            id = "seed-ao3",
+            name = "AO3",
+            startUrl = "https://archiveofourown.org/",
+            iconPath = null,
+            themeColor = Color.rgb(155, 0, 0),
+            displayMode = "standalone",
+            createdAt = now,
+            lastOpenedAt = now - 2
+        )
+    )
+
+    private fun seedToJson(app: WebAppDefinition, now: Long): JSONObject =
+        JSONObject()
+            .put("id", app.id)
+            .put("name", app.name)
+            .put("startUrl", app.startUrl)
+            .put("themeColor", app.themeColor)
+            .put("displayMode", app.displayMode)
+            .put("createdAt", app.createdAt)
+            .put("lastOpenedAt", app.lastOpenedAt)
+            // 同步层硬要求：normalizeStoredWebAppRecord 无 rev 直接丢弃（op-log.ts:1212）。
+            // 不带 rev 会导致编辑任一 WebApp 时，其余种子在 JS 层不可见、写回时被覆盖。
+            .put("rev", JSONObject()
+                .put("updatedAt", now)
+                .put("deviceId", "seed"))
 
     /**
      * 首次启动预置导航：博客 / 电影站 / AO3。
@@ -189,51 +261,10 @@ class WebAppRepository(
      */
     private fun seedDefaultWebApps(): List<WebAppDefinition> {
         val now = System.currentTimeMillis()
-        val seeds = listOf(
-            WebAppDefinition(
-                id = "seed-blog",
-                name = "博客",
-                startUrl = "https://anglesya.win/",
-                iconPath = null,
-                themeColor = Color.rgb(18, 109, 106),
-                displayMode = "standalone",
-                createdAt = now,
-                lastOpenedAt = now
-            ),
-            WebAppDefinition(
-                id = "seed-movie",
-                name = "2BTV",
-                startUrl = "https://2btv.eu.org/",
-                iconPath = null,
-                themeColor = Color.rgb(18, 109, 106),
-                displayMode = "standalone",
-                createdAt = now,
-                lastOpenedAt = now - 1
-            ),
-            WebAppDefinition(
-                id = "seed-ao3",
-                name = "AO3",
-                startUrl = "https://archiveofourown.org/",
-                iconPath = null,
-                themeColor = Color.rgb(155, 0, 0),
-                displayMode = "standalone",
-                createdAt = now,
-                lastOpenedAt = now - 2
-            )
-        )
+        val seeds = seedDefinitions(now)
         val appsJson = JSONObject()
         seeds.forEach { app ->
-            appsJson.put(
-                app.id,
-                JSONObject()
-                    .put("id", app.id)
-                    .put("name", app.name)
-                    .put("startUrl", app.startUrl)
-                    .put("themeColor", app.themeColor)
-                    .put("displayMode", app.displayMode)
-                    .put("createdAt", app.createdAt)
-                    .put("lastOpenedAt", app.lastOpenedAt)
-            )
+            appsJson.put(app.id, seedToJson(app, now))
         }
         runCatching {
             AtomicFileWriter.writeText(storeFile, emptyWebAppsJson().put("apps", appsJson).toString())
