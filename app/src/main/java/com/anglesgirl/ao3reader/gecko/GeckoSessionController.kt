@@ -347,7 +347,7 @@ data class GeckoFindInPageResult(
 )
 
 class GeckoSessionController(
-    context: Context,
+    private val context: Context,
     initialUrl: String,
     existingSession: GeckoSession? = null,
     loadInitialUrl: Boolean = true,
@@ -1301,8 +1301,12 @@ class GeckoSessionController(
      * 自家站点识别标记：UA 末尾追加 HyperBrowser/<version>，2BTV 等自有站点
      * 检测到后可直接配合输出视频地址，无需扩展嗅探。
      */
-    private fun hyperBrowserToken(): String =
-        " HyperBrowser/${com.anglesgirl.ao3reader.BuildConfig.VERSION_NAME}"
+    private fun hyperBrowserToken(): String {
+        val version = runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrDefault("unknown")
+        return " HyperBrowser/$version"
+    }
 
     private fun mobileUserAgent(): String {
         val androidVersion = Build.VERSION.RELEASE.takeIf { it.isNotBlank() } ?: "10"
