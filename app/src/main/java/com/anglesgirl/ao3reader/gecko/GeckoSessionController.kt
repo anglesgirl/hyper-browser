@@ -1249,11 +1249,11 @@ class GeckoSessionController(
 
     fun applyWebsiteDisplayMode(mode: String) {
         val sessionSettings = session.settings
-        sessionSettings.setUserAgentOverride(null)
         when (BrowserSettings.normalizedWebsiteDisplayMode(mode)) {
             BrowserSettings.WEBSITE_DISPLAY_DESKTOP -> {
                 sessionSettings.setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_DESKTOP)
                 sessionSettings.setViewportMode(GeckoSessionSettings.VIEWPORT_MODE_DESKTOP)
+                sessionSettings.setUserAgentOverride(desktopUserAgent())
             }
             BrowserSettings.WEBSITE_DISPLAY_TABLET -> {
                 sessionSettings.setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
@@ -1263,6 +1263,7 @@ class GeckoSessionController(
             else -> {
                 sessionSettings.setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
                 sessionSettings.setViewportMode(GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
+                sessionSettings.setUserAgentOverride(mobileUserAgent())
             }
         }
     }
@@ -1296,9 +1297,24 @@ class GeckoSessionController(
         return GeckoSessionCloseResult.Closed
     }
 
+    /**
+     * 自家站点识别标记：UA 末尾追加 HyperBrowser/<version>，2BTV 等自有站点
+     * 检测到后可直接配合输出视频地址，无需扩展嗅探。
+     */
+    private fun hyperBrowserToken(): String =
+        " HyperBrowser/${com.anglesgirl.ao3reader.BuildConfig.VERSION_NAME}"
+
+    private fun mobileUserAgent(): String {
+        val androidVersion = Build.VERSION.RELEASE.takeIf { it.isNotBlank() } ?: "10"
+        return "Mozilla/5.0 (Android $androidVersion; Mobile; rv:151.0) Gecko/151.0 Firefox/151.0" + hyperBrowserToken()
+    }
+
+    private fun desktopUserAgent(): String =
+        "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/151.0 Firefox/151.0" + hyperBrowserToken()
+
     private fun tabletUserAgent(): String {
         val androidVersion = Build.VERSION.RELEASE.takeIf { it.isNotBlank() } ?: "10"
-        return "Mozilla/5.0 (Android $androidVersion; Tablet; rv:151.0) Gecko/151.0 Firefox/151.0"
+        return "Mozilla/5.0 (Android $androidVersion; Tablet; rv:151.0) Gecko/151.0 Firefox/151.0" + hyperBrowserToken()
     }
 
     private fun registerBridgeHandler(targetSession: GeckoSession) {

@@ -687,6 +687,50 @@ class ExtensionRepository(
         Log.i(TAG, "movy antileech installed via ensureBuiltIn")
     }
 
+    /**
+     * 安装随包内置的视频播放器扩展。
+     * 嗅探网页视频流地址（m3u8/mpd/mp4），悬浮按钮一键用 ArtPlayer 接管播放，
+     * 网页端不再负责播放层。需要改 Referer 的站点由各防盗链扩展（如 movy）在
+     * webRequest 层统一处理。
+     * 与 movy 防盗链同机制：GeckoView ensureBuiltIn 从 assets 加载，幂等。
+     */
+    suspend fun installBundledVideoPlayer() {
+        val guid = "video-player@local"
+        if (installedState.value.any { it.guid == guid }) return
+        val installedExtension = withContext(Dispatchers.Main.immediate) {
+            val controller = GeckoRuntimeProvider.get(context).webExtensionController
+            val result = runCatching {
+                controller.ensureBuiltIn("resource://android/assets/video-player/", guid)
+            }.getOrElse { error ->
+                Log.e(TAG, "video player ensureBuiltIn threw", error)
+                throw error
+            }
+            val ext = runCatching { withTimeout(30_000) { result.await() } }
+                .getOrElse { error ->
+                    Log.e(TAG, "video player ensureBuiltIn await failed", error)
+                    throw error
+                }
+            if (ext == null) {
+                Log.e(TAG, "video player ensureBuiltIn returned null")
+                throw IllegalStateException("ensureBuiltIn returned null for $guid")
+            }
+            ext
+        }
+        upsertInstalled(
+            InstalledExtensionState(
+                guid = guid,
+                name = "视频播放器",
+                version = "1.0.0",
+                enabled = true,
+                source = "Bundled",
+                permissionsSnapshot = "webRequest, <all_urls>",
+                xpiPath = null,
+                installedAt = System.currentTimeMillis()
+            )
+        )
+        Log.i(TAG, "video player installed via ensureBuiltIn")
+    }
+
     private fun WebExtension.toInstalledState(
         existing: InstalledExtensionState?,
         enabledOverride: Boolean? = null

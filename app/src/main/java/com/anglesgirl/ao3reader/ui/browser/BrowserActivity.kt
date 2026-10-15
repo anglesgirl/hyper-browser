@@ -154,6 +154,8 @@ class BrowserActivity : ComponentActivity() {
             runCatching { (application as HyperBrowserApp).extensions.installBundledA03Zh() }
             // movy 防盗链扩展：分片请求注入 movy.sx 来路，网页播放器直连
             runCatching { (application as HyperBrowserApp).extensions.installBundledMovyAntileech() }
+            // 视频播放器扩展：嗅探视频地址，ArtPlayer 接管播放层
+            runCatching { (application as HyperBrowserApp).extensions.installBundledVideoPlayer() }
         }
         val initialIntent = intent.toExternalBrowserIntent()
         val initialUrl = if (initialIntent?.download == false && initialIntent.url != null) {
