@@ -64,12 +64,21 @@ browser.runtime.onMessage.addListener((msg) => {
 });
 
 // 自家站点配合输出：2BTV 等检测到 HyperBrowser UA 后，直接在页面里输出视频地址
-// <meta name="hyper-video-url" content="https://...m3u8">
+// <meta name="hyper-video-url" content="https://...m3u8">（也可能是相对路径）
 function checkSiteCooperation() {
   const meta = document.querySelector('meta[name="hyper-video-url"]');
-  const url = meta && meta.getAttribute('content');
-  if (url && /^https?:/i.test(url)) {
-    ensureButton(url.trim());
+  let url = meta && meta.getAttribute('content');
+  if (url) {
+    url = url.trim();
+    // 相对路径转绝对：meta 可能输出 /api/... 这种站内地址
+    if (!/^https?:/i.test(url)) {
+      try {
+        url = new URL(url, window.location.origin).href;
+      } catch (e) {
+        return false;
+      }
+    }
+    ensureButton(url);
     return true;
   }
   return false;
