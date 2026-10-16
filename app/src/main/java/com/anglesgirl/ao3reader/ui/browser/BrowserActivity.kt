@@ -156,6 +156,8 @@ class BrowserActivity : ComponentActivity() {
             runCatching { (application as HyperBrowserApp).extensions.installBundledMovyAntileech() }
             // 视频播放器扩展：嗅探视频地址，ArtPlayer 接管播放层
             runCatching { (application as HyperBrowserApp).extensions.installBundledVideoPlayer() }
+            // uBlock Origin：内置广告屏蔽（国内 AMO 装不上，直接随包内置）
+            runCatching { (application as HyperBrowserApp).extensions.installBundledUBlock() }
         }
         val initialIntent = intent.toExternalBrowserIntent()
         val initialUrl = if (initialIntent?.download == false && initialIntent.url != null) {

@@ -731,6 +731,43 @@ class ExtensionRepository(
         Log.i(TAG, "video player installed via ensureBuiltIn")
     }
 
+    suspend fun installBundledUBlock() {
+        val guid = "uBlock0@raymondhill.net"
+        if (installedState.value.any { it.guid == guid }) return
+        val installedExtension = withContext(Dispatchers.Main.immediate) {
+            val controller = GeckoRuntimeProvider.get(context).webExtensionController
+            val result = runCatching {
+                controller.ensureBuiltIn("resource://android/assets/ublock-origin/", guid)
+            }.getOrElse { error ->
+                Log.e(TAG, "ublock ensureBuiltIn threw", error)
+                throw error
+            }
+            val ext = runCatching { withTimeout(30_000) { result.await() } }
+                .getOrElse { error ->
+                    Log.e(TAG, "ublock ensureBuiltIn await failed", error)
+                    throw error
+                }
+            if (ext == null) {
+                Log.e(TAG, "ublock ensureBuiltIn returned null")
+                throw IllegalStateException("ensureBuiltIn returned null for $guid")
+            }
+            ext
+        }
+        upsertInstalled(
+            InstalledExtensionState(
+                guid = guid,
+                name = "uBlock Origin",
+                version = "1.75.0",
+                enabled = true,
+                source = "Bundled",
+                permissionsSnapshot = "<all_urls>",
+                xpiPath = null,
+                installedAt = System.currentTimeMillis()
+            )
+        )
+        Log.i(TAG, "ublock origin installed via ensureBuiltIn")
+    }
+
     private fun WebExtension.toInstalledState(
         existing: InstalledExtensionState?,
         enabledOverride: Boolean? = null
