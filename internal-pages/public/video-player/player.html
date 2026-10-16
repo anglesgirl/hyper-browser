@@ -74,8 +74,20 @@
             var hls = new Hls({});
             hls.loadSource(src);
             hls.attachMedia(video);
+            // 记录所有错误（非致命也记，方便定位）
             hls.on(Hls.Events.ERROR, function (event, data) {
+              console.log('[hls-error]', data.type, data.details, 'fatal=' + data.fatal);
               if (data.fatal) fail('播放失败：' + (data.type || '未知错误') + ' / ' + (data.details || ''));
+            });
+            // 播放状态检测：10秒后还没播就报
+            var playCheckTimer = setTimeout(function () {
+              if (video.paused || video.readyState < 2) {
+                fail('流已加载但未播放 (readyState=' + video.readyState + ', paused=' + video.paused + ', src=' + src.substring(0, 80) + ')');
+              }
+            }, 10000);
+            video.addEventListener('playing', function () {
+              clearTimeout(playCheckTimer);
+              document.getElementById('err').style.display = 'none';
             });
           } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = src;
