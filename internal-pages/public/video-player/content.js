@@ -99,12 +99,16 @@ browser.runtime.sendMessage({ type: 'get-video' }).then((found) => {
 }).catch(() => scanVideoTags());
 
 // SPA 页面：DOM 变化时再扫一遍 video 标签
+// 注意：站点配合输出（meta）是权威地址，任何时候发现都要更新 currentUrl，
+// 即使按钮已存在（之前可能是嗅探到的坏地址）
 let scanQueued = false;
 new MutationObserver(() => {
   if (scanQueued) return;
   scanQueued = true;
   setTimeout(() => {
     scanQueued = false;
+    // 先查配合输出（权威），有则更新地址
+    if (checkSiteCooperation()) return;
     if (!document.getElementById(BTN_ID)) scanVideoTags();
   }, 1500);
 }).observe(document.documentElement, { childList: true, subtree: true });
