@@ -30069,7 +30069,7 @@ const I18N = {
 				],
 				[
 					'div.flash.notice',
-					/^\s*Successfully logged in\.\s*<strong>You'll stay logged in for (\d+) weeks even if you close your browser, so make sure to log out if you're using a public or shared computer\.\s*<\/strong>\s*$/s,
+					/^\s*Successfully logged in\.\s*(?:<strong>)?You'll stay logged in for (\d+) weeks even if you close your browser, so make sure to log out if you're using a public or shared computer\.\s*(?:<\/strong>)?\s*$/s,
 					'已成功登录。<strong>即使关闭浏览器，您在 $1 周内仍将保持登录状态。如果您使用的是公共或共享计算机，请务必登出。</strong>'
 				],
 
