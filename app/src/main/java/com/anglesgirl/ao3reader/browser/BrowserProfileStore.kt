@@ -54,7 +54,7 @@ data class BrowserSettings(
     val openNewTabsInCurrentTab: Boolean = false,
     val dohEnabled: Boolean = true,
     val dohProviderUrl: String = DEFAULT_DOH_PROVIDER_URL,
-    val dohBootstrapIp: String = "",
+    val dohBootstrapIp: String = "104.16.140.137",
     val httpsOnlyEnabled: Boolean = false,
     val privacyProtectionLevel: String = PRIVACY_PROTECTION_STANDARD,
     val localePreference: String = LOCALE_DEFAULT,

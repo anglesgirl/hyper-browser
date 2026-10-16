@@ -1585,7 +1585,7 @@ class GeckoSessionController(
     companion object {
         internal const val ABOUT_BLANK_URL = "about:blank"
         const val HOME_URL = "hyper://home"
-        const val DEFAULT_HOME_URL = "https://2btv.eu.org/"
+        const val DEFAULT_HOME_URL = "hyper://home"
         const val SETTINGS_URL = "hyper://settings"
         const val BOOKMARKS_URL = "hyper://bookmarks"
         const val HISTORY_URL = "hyper://history"
