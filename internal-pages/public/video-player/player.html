@@ -39,63 +39,65 @@
 
   if (!url) { fail('没有可播放的地址'); return; }
 
+  // 诊断信息：检查关键库是否加载
+  if (typeof Artplayer === 'undefined') { fail('Artplayer 未加载 (artplayer.js 404?)'); return; }
+  if (typeof Hls === 'undefined') { fail('Hls 未加载 (hls.light.min.js 404?)'); return; }
+
   var isM3u8 = /\.m3u8(\?|#|$)/i.test(url);
 
-  var art = new Artplayer({
-    container: '#player',
-    url: url,
-    title: title,
-    volume: 0.8,
-    autoplay: true,
-    pip: true,
-    autoSize: false,
-    autoMini: false,
-    screenshot: false,
-    setting: true,
-    loop: false,
-    flip: true,
-    playbackRate: true,
-    aspectRatio: true,
-    fullscreen: true,
-    fullscreenWeb: true,
-    playsInline: true,
-    miniProgressBar: true,
-    mutex: true,
-    backdrop: true,
-    // 移动端手势：左右滑动快进/快退，上下滑动音量/亮度
-    gesture: true,
-    customType: {
-      m3u8: function (video, src) {
-        if (window.Hls && Hls.isSupported()) {
-          var hls = new Hls({
-            // 分片请求走浏览器默认链路；需要改 Referer 的由扩展 background 的
-            // webRequest 统一处理（见 movy-antileech 模式）
-          });
-          hls.loadSource(src);
-          hls.attachMedia(video);
-          hls.on(Hls.Events.ERROR, function (event, data) {
-            if (data.fatal) fail('播放失败：' + (data.type || '未知错误'));
-          });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = src;
-        } else {
-          fail('当前环境不支持 HLS 播放');
-        }
+  try {
+    var art = new Artplayer({
+      container: '#player',
+      url: url,
+      title: title,
+      volume: 0.8,
+      autoplay: true,
+      pip: true,
+      autoSize: false,
+      autoMini: false,
+      screenshot: false,
+      setting: true,
+      loop: false,
+      flip: true,
+      playbackRate: true,
+      aspectRatio: true,
+      fullscreen: true,
+      fullscreenWeb: true,
+      playsInline: true,
+      miniProgressBar: true,
+      mutex: true,
+      backdrop: true,
+      gesture: true,
+      customType: {
+        m3u8: function (video, src) {
+          if (window.Hls && Hls.isSupported()) {
+            var hls = new Hls({});
+            hls.loadSource(src);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.ERROR, function (event, data) {
+              if (data.fatal) fail('播放失败：' + (data.type || '未知错误') + ' / ' + (data.details || ''));
+            });
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = src;
+          } else {
+            fail('当前环境不支持 HLS 播放 (Hls.isSupported=false)');
+          }
+        },
       },
-    },
-  });
-
-  // 非 m3u8 且浏览器原生不支持时给出提示（ArtPlayer 会尝试直接播）
-  if (!isM3u8) {
-    art.on('error', function () {
-      fail('播放失败，地址可能已失效或格式不支持');
     });
-  }
 
-  art.on('ready', function () {
-    // 竖屏小屏时默认铺满宽度
-    document.getElementById('err').style.display = 'none';
-  });
+    if (!isM3u8) {
+      art.on('error', function () {
+        fail('播放失败，地址可能已失效或格式不支持');
+      });
+    }
+
+    art.on('ready', function () {
+      document.getElementById('err').style.display = 'none';
+    });
+  } catch (e) {
+    fail('播放器初始化失败: ' + (e && e.message || e));
+  }
 })();
 </script>
 </body>
