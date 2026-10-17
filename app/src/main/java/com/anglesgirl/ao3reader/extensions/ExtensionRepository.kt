@@ -733,7 +733,8 @@ class ExtensionRepository(
 
     suspend fun installBundledUBlock() {
         val guid = "uBlock0@raymondhill.net"
-        if (installedState.value.any { it.guid == guid }) return
+        // 每次启动都尝试：GeckoView 的 ensureBuiltIn 对已安装的会直接返回，
+        // 比只查本地状态更可靠（本地状态可能和实际不一致）
         val installedExtension = withContext(Dispatchers.Main.immediate) {
             val controller = GeckoRuntimeProvider.get(context).webExtensionController
             val result = runCatching {
