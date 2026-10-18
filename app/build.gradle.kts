@@ -22,7 +22,8 @@ android {
         applicationId = "com.anglesgirl.ao3reader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
+        // versionCode 按构建时间递增，确保每次 CI 构建都能被旧版检测到更新
+        versionCode = (System.currentTimeMillis() / 1000 / 60).toInt() - 29000000
         versionName = "2.1.0-beta.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -23,6 +23,16 @@ import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
+/**
+ * GitHub 下载地址默认走镜像加速（国内直连 GitHub 经常超时）。
+ */
+fun mirrorUrl(url: String): String {
+    if (url.startsWith("https://github.com/")) {
+        return "https://ghproxy.net/" + url
+    }
+    return url
+}
+
 data class UpdateAsset(
     val abi: String,
     val url: String,
@@ -232,7 +242,8 @@ class AppUpdateManager(context: Context, private val settingsStore: UpdateSettin
         saveDownloadRecord(UpdateDownloadRecord.from(update, state, source = UPDATE_SOURCE_FOREGROUND))
         onState(state)
 
-        val request = Request.Builder().url(update.asset.url).build()
+        // 默认走镜像加速，国内 GitHub 直连经常超时
+        val request = Request.Builder().url(mirrorUrl(update.asset.url)).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("APK 下载失败：HTTP ${response.code}")
             val body = response.body ?: error("APK 下载响应为空。")
