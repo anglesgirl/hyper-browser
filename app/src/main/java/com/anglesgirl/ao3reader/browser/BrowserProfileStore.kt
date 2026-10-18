@@ -27,6 +27,21 @@ data class BrowserBookmark(
     val iconPath: String? = null
 )
 
+/**
+ * DoH bootstrap IP 池（移动宽带偶发阻断时随机切换，避免单点全死）。
+ * 默认 172.64.146.66；育碧商店 IP 做备用（104.18.40.152 / 172.64.147.104）。
+ */
+val DOH_BOOTSTRAP_POOL = listOf(
+    "172.64.146.66",   // 默认（Cloudflare）
+    "104.16.140.137",  // 旧默认
+    "104.16.141.137",  // 旧备用
+    "104.18.40.152",   // 育碧商店
+    "172.64.147.104",  // 育碧商店
+)
+
+/** 从池中随机取一个 bootstrap IP */
+fun randomDohBootstrapIp(): String = DOH_BOOTSTRAP_POOL.random()
+
 internal fun normalizeBookmarkUrl(value: String): String {
     val trimmed = value.trim()
     if (trimmed.isBlank()) return ""
@@ -54,7 +69,7 @@ data class BrowserSettings(
     val openNewTabsInCurrentTab: Boolean = false,
     val dohEnabled: Boolean = true,
     val dohProviderUrl: String = DEFAULT_DOH_PROVIDER_URL,
-    val dohBootstrapIp: String = "104.16.140.137",
+    val dohBootstrapIp: String = "172.64.146.66",
     val httpsOnlyEnabled: Boolean = false,
     val privacyProtectionLevel: String = PRIVACY_PROTECTION_STANDARD,
     val localePreference: String = LOCALE_DEFAULT,

@@ -2,9 +2,12 @@ package com.anglesgirl.ao3reader.gecko
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.util.Log
 import com.anglesgirl.ao3reader.browser.BrowserProfileStore
 import com.anglesgirl.ao3reader.browser.BrowserSettings
 import com.anglesgirl.ao3reader.browser.BrowserWebNotificationController
+import com.anglesgirl.ao3reader.browser.DOH_BOOTSTRAP_POOL
+import com.anglesgirl.ao3reader.browser.randomDohBootstrapIp
 import com.anglesgirl.ao3reader.data.AtomicFileWriter
 import org.mozilla.geckoview.ContentBlocking
 import org.mozilla.geckoview.AllowOrDeny
@@ -212,8 +215,19 @@ object GeckoRuntimeProvider {
             }
             appendLine("  network.trr.mode: ${dohMode(settings)}")
             appendLine("  network.trr.uri: \"${settings.dohProviderUrl}\"")
-            if (settings.dohBootstrapIp.isNotBlank()) {
-                appendLine("  network.trr.bootstrapAddress: \"${settings.dohBootstrapIp}\"")
+            // bootstrap IP 随机化：用户没手动指定时，每次启动从池中随机取一个，
+            // 移动宽带偶发阻断单个 IP 时，下次启动自动换，避免全死。
+            // 用户在设置里手动填了 IP 则尊重手动值。
+            val bootstrapIp = settings.dohBootstrapIp.trim()
+            val effectiveBootstrap = if (bootstrapIp.isBlank() || bootstrapIp in DOH_BOOTSTRAP_POOL) {
+                randomDohBootstrapIp().also {
+                    Log.i("GeckoRuntime", "DoH bootstrap 随机选择: $it (池: ${DOH_BOOTSTRAP_POOL.size} 个)")
+                }
+            } else {
+                bootstrapIp // 用户手动指定的，用手动值
+            }
+            if (effectiveBootstrap.isNotBlank()) {
+                appendLine("  network.trr.bootstrapAddress: \"$effectiveBootstrap\"")
             }
             appendLine("  doh-rollout.mode: ${dohMode(settings)}")
             appendLine("  doh-rollout.uri: \"${settings.dohProviderUrl}\"")
