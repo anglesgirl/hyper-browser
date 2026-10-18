@@ -75,7 +75,14 @@ jobs:
           import fs from "node:fs";
 
           const gradle = fs.readFileSync("app/build.gradle.kts", "utf8");
-          const versionCode = gradle.match(/versionCode\s*=\s*(\d+)/)?.[1];
+          let versionCode = gradle.match(/versionCode\s*=\s*(\d+)/)?.[1];
+          if (!versionCode) {
+            // computed form, e.g.: versionCode = (System.currentTimeMillis() / 1000 / 60).toInt() - 29000000
+            const computed = gradle.match(/versionCode\s*=\s*\(System\.currentTimeMillis\(\)\s*\/\s*1000\s*\/\s*60\)\.toInt\(\)\s*-\s*(\d+)/);
+            if (computed) {
+              versionCode = String(Math.floor(Date.now() / 60000) - parseInt(computed[1], 10));
+            }
+          }
           const versionName = gradle.match(/versionName\s*=\s*"([^"]+)"/)?.[1];
 
           if (!versionCode) throw new Error("versionCode not found in app/build.gradle.kts");
