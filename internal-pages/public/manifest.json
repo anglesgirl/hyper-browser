@@ -66,6 +66,31 @@
       ],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "https://missav.ws/*", "https://*.missav.ws/*",
+        "https://jable.tv/*", "https://*.jable.tv/*",
+        "https://avjoy.me/*", "https://*.avjoy.me/*",
+        "https://pigav.ws/*", "https://*.pigav.ws/*",
+        "https://pigav.com/*", "https://*.pigav.com/*",
+        "https://avtoday.io/*", "https://*.avtoday.io/*",
+        "https://javhdporn.net/*", "https://*.javhdporn.net/*",
+        "https://7mmtv.sx/*", "https://*.7mmtv.sx/*",
+        "https://avple.tv/*", "https://*.avple.tv/*",
+        "https://whos.tv/*", "https://*.whos.tv/*",
+        "https://javday.app/*", "https://*.javday.app/*",
+        "https://supjav.com/*", "https://*.supjav.com/*",
+        "https://javrate.com/*", "https://*.javrate.com/*",
+        "https://hentaimama.io/*", "https://*.hentaimama.io/*",
+        "https://hentaimama.com/*", "https://*.hentaimama.com/*",
+        "https://hentaimama.net/*", "https://*.hentaimama.net/*",
+        "https://rouvb1.xyz/*", "https://*.rouvb1.xyz/*",
+        "https://rou.video/*", "https://*.rou.video/*"
+      ],
+      "js": ["jav-search-collector.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ]
 }

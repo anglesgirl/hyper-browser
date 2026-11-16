@@ -63,6 +63,9 @@ jobs:
       - name: Check internal page TypeScript
         run: pnpm --dir internal-pages typecheck
 
+      - name: Run JAV search tests
+        run: pnpm --dir internal-pages test:jav-search
+
       - name: Run sync tests
         run: pnpm test:sync
 

@@ -2,6 +2,7 @@ import { createSyncBackgroundController } from "@hyper-sync/background";
 import { createBackgroundCommandHandler } from "@hyper-sync/background-adapter";
 import { androidSync } from "./android-sync";
 import type { WebDavSyncResult } from "./hyper-browser";
+import { collectJavSearchPage, getJavSearchCollectionRules, handleJavSearchCommand } from "./jav-search-background";
 
 const NATIVE_APP = "hyperBrowser";
 const BACKGROUND_TARGET = "hyper.internal.background";
@@ -9,6 +10,7 @@ const AUTO_SYNC_DEBOUNCE_MS = 1800;
 const REMOTE_SYNC_ALARM = "hyper-browser-android-remote-sync";
 const REMOTE_SYNC_ALARM_MINUTES = 1;
 const NATIVE_COMMAND_PORT_TARGET = "hyper.internal.nativeCommandPort";
+const JAV_SEARCH_TARGET = "hyper.javSearch.collect";
 
 const internalPageMessageTypes = new Set([
   "data.home",
@@ -91,6 +93,18 @@ function startBackground(): void {
         .then((data) => ({ ok: true, data }))
         .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
     }
+    if (message.target === JAV_SEARCH_TARGET) {
+      const url = senderUrl(sender);
+      if (!isWebContentSender(sender)) return Promise.resolve({ ok: false, error: "Rejected JAV search collection." });
+      if (message.action === "rules") {
+        return getJavSearchCollectionRules(message as Parameters<typeof getJavSearchCollectionRules>[0], url)
+          .then((data) => ({ ok: !!data, data }))
+          .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+      }
+      return collectJavSearchPage(message as Parameters<typeof collectJavSearchPage>[0], url)
+        .then((data) => ({ ok: !!data, data }))
+        .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+    }
     if (message.nativeApp !== NATIVE_APP) return false;
     return handleNativeBridgeMessage(message, sender);
   });
@@ -101,6 +115,9 @@ function startBackground(): void {
 }
 
 async function handleBackgroundCommand(message: { type: string; payload?: unknown }): Promise<unknown> {
+  if (message.type.startsWith("jav.search.")) {
+    return handleJavSearchCommand(message.type, message.payload);
+  }
   const shared = await hyperCommands.handle(message);
   if (shared.handled) return shared.data;
   throw new Error("Unknown background command.");

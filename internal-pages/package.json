@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:jav-search": "node --test tests/jav-search-*.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

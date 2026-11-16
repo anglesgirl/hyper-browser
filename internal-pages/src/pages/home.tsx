@@ -17,6 +17,7 @@ import "../styles.css";
 import { t } from "../i18n";
 import { createLauncherLayoutStorage, waitForLauncherLayoutSaves } from "../launcher-layout-storage";
 import { isPlainObject, sendBackgroundCommand } from "../background-command";
+import { JavBrowserNav } from "../jav-browser-nav";
 
 const AUTO_SYNC_DEBOUNCE_MS = 1800;
 const ANDROID_SYSTEM_ENTRY_THEME: LauncherSystemEntryTheme = {
@@ -135,6 +136,7 @@ function HomePage() {
 
   return (
     <>
+      <JavBrowserNav />
       <LauncherPage
         labels={launcherLabels}
         platform={platform}
