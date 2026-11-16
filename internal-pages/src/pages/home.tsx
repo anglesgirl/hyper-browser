@@ -6,6 +6,7 @@ import {
   createLauncherLabels,
   createLauncherSystemEntries,
   type LauncherPlatform,
+  type LauncherSystemEntry,
   type LauncherSystemEntryTheme,
 } from "@hyper-launcher";
 import { createLauncherWebDavSyncLabels, useLauncherWebDavSync, type LauncherWebDavSyncEvent, type LauncherWebDavSyncOptions } from "@hyper-sync/launcher-webdav-sync";
@@ -17,7 +18,7 @@ import "../styles.css";
 import { t } from "../i18n";
 import { createLauncherLayoutStorage, waitForLauncherLayoutSaves } from "../launcher-layout-storage";
 import { isPlainObject, sendBackgroundCommand } from "../background-command";
-import { JavBrowserNav } from "../jav-browser-nav";
+import { JavSearchDialog } from "../jav-search-dialog";
 
 const AUTO_SYNC_DEBOUNCE_MS = 1800;
 const ANDROID_SYSTEM_ENTRY_THEME: LauncherSystemEntryTheme = {
@@ -35,6 +36,28 @@ function HomePage() {
   const translate = useCallback((key: string, values?: Record<string, unknown>) =>
     t(key as Parameters<typeof t>[0], (values || {}) as Record<string, string | number>),
   []);
+  const [javSearchOpen, setJavSearchOpen] = useState(() => isJavSearchLocation(window.location.hash));
+
+  useEffect(() => {
+    const onHashChange = () => setJavSearchOpen(isJavSearchLocation(window.location.hash));
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  const openJavSearch = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.hash = "jav-search";
+    window.history.replaceState(window.history.state, "", url.toString());
+    setJavSearchOpen(true);
+  }, []);
+
+  const closeJavSearch = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.hash = "";
+    window.history.replaceState(window.history.state, "", url.toString());
+    setJavSearchOpen(false);
+  }, []);
+
   const webDavLabels = useMemo(() => createLauncherWebDavSyncLabels(translate), [translate]);
   const launcherLabels = useMemo(() => createLauncherLabels(translate), [translate]);
 
@@ -86,7 +109,18 @@ function HomePage() {
   }), [saveSyncSettings, subscribeSyncEvents, webDavLabels]);
   const webDavSync = useLauncherWebDavSync(webDavOptions);
 
-  const systemEntries = useMemo(() => createLauncherSystemEntries(translate, ANDROID_SYSTEM_ENTRY_THEME), [translate]);
+  const systemEntries = useMemo<LauncherSystemEntry[]>(() => [
+    ...createLauncherSystemEntries(translate, ANDROID_SYSTEM_ENTRY_THEME),
+    {
+      id: "system:jav-search",
+      kind: "system",
+      title: translate("javSearch.homeEntry"),
+      mark: "JAV",
+      color: "#283b63",
+      systemIcon: "search",
+      action: "javSearch",
+    },
+  ], [translate]);
 
   const platform = useMemo<LauncherPlatform>(() => ({
     systemEntries,
@@ -106,6 +140,7 @@ function HomePage() {
       if (action === "search") window.location.href = "https://archiveofourown.org/search";
       if (action === "favorites") window.location.href = "https://archiveofourown.org/bookmarks";
       if (action === "downloads") window.hyperBrowser.showDownloads();
+      if (action === "javSearch") openJavSearch();
     },
     deleteApp: async (app) => {
       const items = await sendBackgroundCommand<WebAppItem[]>("webapps.delete", { id: app.id });
@@ -132,11 +167,10 @@ function HomePage() {
       });
       return items;
     },
-  }), [systemEntries]);
+  }), [openJavSearch, systemEntries]);
 
   return (
     <>
-      <JavBrowserNav />
       <LauncherPage
         labels={launcherLabels}
         platform={platform}
@@ -147,9 +181,14 @@ function HomePage() {
         topActions={webDavSync.topActions}
         variant="mobile"
       />
+      {javSearchOpen && <JavSearchDialog onClose={closeJavSearch} />}
       {webDavSync.settingsDialog}
     </>
   );
+}
+
+function isJavSearchLocation(hash: string): boolean {
+  return hash === "#jav-search" || hash === "#jav-search-results";
 }
 
 function isWebDavConfigured(settings: BrowserSettings): boolean {

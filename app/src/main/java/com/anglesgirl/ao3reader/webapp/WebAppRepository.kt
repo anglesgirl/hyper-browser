@@ -26,6 +26,29 @@ import org.json.JSONObject
 import java.io.File
 import java.io.ByteArrayOutputStream
 
+private data class JavSiteSeed(val id: String, val name: String, val startUrl: String)
+
+private val JAV_SITE_SEEDS = listOf(
+    JavSiteSeed("missav", "MissAV", "https://missav.ws/"),
+    JavSiteSeed("jable", "Jable", "https://jable.tv/"),
+    JavSiteSeed("rou", "ROU", "https://rou.video/home"),
+    JavSiteSeed("avjoy", "AVJOY", "https://avjoy.me/"),
+    JavSiteSeed("pigav", "PigAV", "https://pigav.com/"),
+    JavSiteSeed("avtoday", "AVToday", "https://avtoday.io/cht/index.html"),
+    JavSiteSeed("javhdporn", "JavHDPorn", "https://www.javhdporn.net/"),
+    JavSiteSeed("7mmtv", "7MMTV", "https://7mmtv.sx/"),
+    JavSiteSeed("avple", "AVPLE", "https://avple.tv/"),
+    JavSiteSeed("whostv", "Whos.tv", "https://whos.tv/"),
+    JavSiteSeed("javday", "JAVDAY", "https://javday.app/"),
+    JavSiteSeed("supjav", "SUPJAV", "https://supjav.com/"),
+    JavSiteSeed("javrate", "JavRate", "https://www.javrate.com/"),
+    JavSiteSeed("javdb", "JavDB", "https://javdb.com/"),
+    JavSiteSeed("javtrailers", "JavTrailers", "https://javtrailers.com/ja/videos"),
+    JavSiteSeed("stripchat", "Stripchat", "https://zt.stripchat.com/"),
+    JavSiteSeed("pornhub-cn", "Pornhub CN", "https://cn.pornhub.com/"),
+    JavSiteSeed("xvideos", "XVideos", "https://www.xvideos.com/")
+)
+
 class WebAppRepository(
     private val context: Context
 ) {
@@ -176,7 +199,7 @@ class WebAppRepository(
 
     private fun load(): List<WebAppDefinition> {
         if (!storeFile.exists()) {
-            // 首次启动：预置用户的三个导航站，之后走正常加载路径
+            // 首次启动：预置默认 WebApp 入口，之后走正常加载路径
             return seedDefaultWebApps()
         }
         // 存量修复：补回缺失的种子。用户手动删除的有 tombstone，不补；
@@ -191,7 +214,7 @@ class WebAppRepository(
                 if (!appsObj.has(seed.id) && !tombstonesObj.has(seed.id)) {
                     appsObj.put(seed.id, seedToJson(seed, now))
                     changed = true
-                    android.util.Log.i("WebAppRepository", "补回缺失的预置导航: ${seed.name}")
+                    android.util.Log.i("WebAppRepository", "补回缺失的预置 WebApp: ${seed.name}")
                 }
             }
             if (changed) {
@@ -237,7 +260,18 @@ class WebAppRepository(
             createdAt = now,
             lastOpenedAt = now - 2
         )
-    )
+    ) + JAV_SITE_SEEDS.mapIndexed { index, site ->
+        WebAppDefinition(
+            id = "seed-jav-${site.id}",
+            name = site.name,
+            startUrl = site.startUrl,
+            iconPath = null,
+            themeColor = Color.rgb(18, 109, 106),
+            displayMode = "standalone",
+            createdAt = now,
+            lastOpenedAt = now - 3L - index.toLong()
+        )
+    }
 
     private fun seedToJson(app: WebAppDefinition, now: Long): JSONObject =
         JSONObject()
@@ -255,7 +289,7 @@ class WebAppRepository(
                 .put("deviceId", "seed"))
 
     /**
-     * 首次启动预置导航：博客 / 电影站 / AO3。
+     * 首次启动预置常用 WebApp 和 JAV 站点入口。
      * 只在 webapps.json 完全不存在时执行一次并落盘；用户手动删除后不再补回。
      * 图标传 null，走站点 favicon，拿不到时用首字母兜底（BrowserIconComposer）。
      */
@@ -268,7 +302,7 @@ class WebAppRepository(
         }
         runCatching {
             AtomicFileWriter.writeText(storeFile, emptyWebAppsJson().put("apps", appsJson).toString())
-            android.util.Log.i("WebAppRepository", "首次启动已预置 ${seeds.size} 个导航")
+            android.util.Log.i("WebAppRepository", "首次启动已预置 ${seeds.size} 个 WebApp")
         }.onFailure {
             android.util.Log.w("WebAppRepository", "预置导航写入失败: ${it.message}")
         }
