@@ -2142,6 +2142,9 @@ private fun BrowserScreen(
                                         installed = syncedInstalled,
                                         noAndroidAddonsMessage = context.getString(R.string.extensions_no_android_addons),
                                         allMatchesInstalledMessage = context.getString(R.string.extensions_all_matches_installed),
+                                        foundResultsMessage = { count ->
+                                            context.getString(R.string.extensions_found_results, count)
+                                        },
                                         foundWithInstalledMessage = { installableCount, installedMatches ->
                                             context.getString(R.string.extensions_found_with_installed, installableCount, installedMatches)
                                         }
@@ -2560,6 +2563,7 @@ internal fun extensionSearchCompletedState(
     installed: List<InstalledExtensionState>,
     noAndroidAddonsMessage: String,
     allMatchesInstalledMessage: String,
+    foundResultsMessage: (resultCount: Int) -> String,
     foundWithInstalledMessage: (installableCount: Int, installedMatches: Int) -> String
 ): ExtensionSearchUiState {
     val installedGuids = installed.map { it.guid }.toSet()
@@ -2569,7 +2573,7 @@ internal fun extensionSearchCompletedState(
         results.isEmpty() -> noAndroidAddonsMessage
         installableCount == 0 -> allMatchesInstalledMessage
         installedMatches > 0 -> foundWithInstalledMessage(installableCount, installedMatches)
-        else -> null
+        else -> foundResultsMessage(results.size)
     }
     return ExtensionSearchUiState(results = results, message = message)
 }

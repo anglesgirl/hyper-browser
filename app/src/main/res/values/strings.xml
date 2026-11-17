@@ -189,7 +189,7 @@
     <string name="extensions_search_placeholder">Search extensions</string>
     <string name="extensions_installed_title">Installed add-ons</string>
     <string name="extensions_empty_installed">No extensions installed yet.</string>
-    <string name="extensions_recommended_from_amo">Recommended from AMO</string>
+    <string name="extensions_search_results_title">AMO search results</string>
     <string name="extensions_amo_catalog_note">Search uses the Android AMO catalog. Installed add-ons appear in the browser menu like Iceraven extensions.</string>
     <string name="extensions_summary_title">Extensions</string>
     <string name="extensions_summary_counts">%1$d enabled · %2$d installed</string>
@@ -207,6 +207,7 @@
     <string name="extensions_searching_amo">Searching AMO...</string>
     <string name="extensions_no_android_addons">No Android add-ons found.</string>
     <string name="extensions_all_matches_installed">All AMO matches are already installed.</string>
+    <string name="extensions_found_results">AMO results: %1$d</string>
     <string name="extensions_found_with_installed">%1$d add-ons found · %2$d already installed</string>
     <string name="extensions_amo_search_failed">AMO search failed.</string>
     <string name="extensions_installed_name">Installed %1$s.</string>

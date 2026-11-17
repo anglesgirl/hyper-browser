@@ -528,7 +528,7 @@ class ExtensionRepository(
             if (!response.isSuccessful) error("AMO search failed: HTTP ${response.code}")
             response.body?.string() ?: error("AMO returned an empty response.")
         }
-        parseSearch(JSONObject(body).getJSONArray("results"))
+        parseAmoSearchResponse(body)
     }
 
     suspend fun downloadAndInstall(addon: AmoAddonListing, onStage: (String) -> Unit = {}) {
@@ -879,43 +879,6 @@ class ExtensionRepository(
         )
     }
 
-    private fun parseSearch(results: JSONArray): List<AmoAddonListing> =
-        buildList {
-            for (index in 0 until results.length()) {
-                val item = results.getJSONObject(index)
-                val version = item.getJSONObject("current_version")
-                val file = version.getJSONObject("file")
-                val compatibility = version.optJSONObject("compatibility")?.optJSONObject("android")
-                add(
-                    AmoAddonListing(
-                        name = localized(item.getJSONObject("name")),
-                        slug = item.getString("slug"),
-                        guid = item.getString("guid"),
-                        version = version.getString("version"),
-                        userCount = item.optInt("average_daily_users", 0),
-                        xpiUrl = file.getString("url"),
-                        permissions = file.optJSONArray("permissions").toStringList(),
-                        minAndroidVersion = compatibility?.optString("min"),
-                        maxAndroidVersion = compatibility?.optString("max")
-                    )
-                )
-            }
-        }
-
-    private fun localized(value: JSONObject): String =
-        value.nonNullString("zh-CN")
-            .ifBlank { value.nonNullString("en-US") }
-            .ifBlank { value.nonNullString("_default") }
-            .ifBlank { value.keys().asSequence().firstOrNull()?.let { key -> value.nonNullString(key) }.orEmpty() }
-
-    private fun JSONObject.nonNullString(key: String): String =
-        optString(key).takeUnless { it == "null" }.orEmpty()
-
-    private fun JSONArray?.toStringList(): List<String> {
-        if (this == null) return emptyList()
-        return (0 until length()).map { optString(it) }.filter { it.isNotBlank() }
-    }
-
     private fun upsertInstalled(extension: InstalledExtensionState) {
         saveInstalled((installedState.value.filterNot { it.guid == extension.guid } + extension).sortedByDescending { it.installedAt })
     }
@@ -968,6 +931,44 @@ class ExtensionRepository(
         const val ENABLE_SOURCE_USER = 1
         const val ENABLE_SOURCE_APP = 2
     }
+}
+
+internal fun parseAmoSearchResponse(body: String): List<AmoAddonListing> =
+    buildList {
+        val results = JSONObject(body).getJSONArray("results")
+        for (index in 0 until results.length()) {
+            val item = results.getJSONObject(index)
+            val version = item.getJSONObject("current_version")
+            val file = version.getJSONObject("file")
+            val compatibility = version.optJSONObject("compatibility")?.optJSONObject("android")
+            add(
+                AmoAddonListing(
+                    name = item.getJSONObject("name").localized(),
+                    slug = item.getString("slug"),
+                    guid = item.getString("guid"),
+                    version = version.getString("version"),
+                    userCount = item.optInt("average_daily_users", 0),
+                    xpiUrl = file.getString("url"),
+                    permissions = file.optJSONArray("permissions").toStringList(),
+                    minAndroidVersion = compatibility?.optString("min"),
+                    maxAndroidVersion = compatibility?.optString("max")
+                )
+            )
+        }
+    }
+
+private fun JSONObject.localized(): String =
+    nonNullString("zh-CN")
+        .ifBlank { nonNullString("en-US") }
+        .ifBlank { nonNullString("_default") }
+        .ifBlank { keys().asSequence().firstOrNull()?.let(::nonNullString).orEmpty() }
+
+private fun JSONObject.nonNullString(key: String): String =
+    optString(key).takeUnless { it == "null" }.orEmpty()
+
+private fun JSONArray?.toStringList(): List<String> {
+    if (this == null) return emptyList()
+    return (0 until length()).map { optString(it) }.filter { it.isNotBlank() }
 }
 
 private suspend fun GeckoResult<*>.await(): Any? =

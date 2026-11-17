@@ -3,7 +3,6 @@ package com.anglesgirl.ao3reader.ui.browser
 import com.anglesgirl.ao3reader.data.InstalledExtensionState
 import com.anglesgirl.ao3reader.extensions.AmoAddonListing
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -31,6 +30,7 @@ class ExtensionSearchStateTest {
             installed = emptyList(),
             noAndroidAddonsMessage = "No Android add-ons found.",
             allMatchesInstalledMessage = "All matches installed.",
+            foundResultsMessage = ::foundResultsMessage,
             foundWithInstalledMessage = ::foundMessage
         )
 
@@ -47,6 +47,7 @@ class ExtensionSearchStateTest {
             installed = listOf(installed("first"), installed("second")),
             noAndroidAddonsMessage = "No Android add-ons found.",
             allMatchesInstalledMessage = "All matches installed.",
+            foundResultsMessage = ::foundResultsMessage,
             foundWithInstalledMessage = ::foundMessage
         )
 
@@ -63,6 +64,7 @@ class ExtensionSearchStateTest {
             installed = listOf(installed("first")),
             noAndroidAddonsMessage = "No Android add-ons found.",
             allMatchesInstalledMessage = "All matches installed.",
+            foundResultsMessage = ::foundResultsMessage,
             foundWithInstalledMessage = ::foundMessage
         )
 
@@ -71,7 +73,7 @@ class ExtensionSearchStateTest {
     }
 
     @Test
-    fun allInstallableSuccessNeedsNoMessage() {
+    fun allInstallableSuccessShowsResultsCountAndKeepsResults() {
         val results = listOf(addon("first"))
 
         val state = extensionSearchCompletedState(
@@ -79,12 +81,31 @@ class ExtensionSearchStateTest {
             installed = emptyList(),
             noAndroidAddonsMessage = "No Android add-ons found.",
             allMatchesInstalledMessage = "All matches installed.",
+            foundResultsMessage = ::foundResultsMessage,
             foundWithInstalledMessage = ::foundMessage
         )
 
         assertEquals(results, state.results)
-        assertNull(state.message)
+        assertEquals("AMO results: 1", state.message)
     }
+
+    @Test
+    fun searchResultsSectionAppearsBeforeInstalledAddons() {
+        assertEquals(
+            listOf(ExtensionsPageSection.SearchResults, ExtensionsPageSection.Installed),
+            extensionPageSections(hasInstallableResults = true)
+        )
+    }
+
+    @Test
+    fun installedSectionRemainsWhenThereAreNoInstallableResults() {
+        assertEquals(
+            listOf(ExtensionsPageSection.Installed),
+            extensionPageSections(hasInstallableResults = false)
+        )
+    }
+
+    private fun foundResultsMessage(resultCount: Int): String = "AMO results: $resultCount"
 
     private fun foundMessage(installableCount: Int, installedMatches: Int): String =
         "$installableCount add-ons found, $installedMatches already installed"

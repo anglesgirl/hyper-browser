@@ -51,6 +51,18 @@ private val ExtensionActionBarHeight = 48.dp
 private val ExtensionActionButtonSize = 40.dp
 private val ExtensionActionIconSize = 24.sp
 
+internal enum class ExtensionsPageSection {
+    SearchResults,
+    Installed
+}
+
+internal fun extensionPageSections(hasInstallableResults: Boolean): List<ExtensionsPageSection> =
+    if (hasInstallableResults) {
+        listOf(ExtensionsPageSection.SearchResults, ExtensionsPageSection.Installed)
+    } else {
+        listOf(ExtensionsPageSection.Installed)
+    }
+
 @Composable
 internal fun ExtensionsPage(
     query: String,
@@ -141,48 +153,55 @@ internal fun ExtensionsPage(
                 message?.let { Text(it, color = Color(0xFF126D6A)) }
             }
         }
-        item {
-            Text(
-                stringResource(R.string.extensions_installed_title),
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        if (installed.isEmpty()) {
-            item {
-                Text(
-                    stringResource(R.string.extensions_empty_installed),
-                    modifier = Modifier.padding(horizontal = 18.dp),
-                    color = Color(0xFF5F6368)
-                )
-            }
-        } else {
-            items(installed, key = { "installed:${it.guid}" }) { extension ->
-                InstalledExtensionRow(
-                    extension = extension,
-                    amoListing = installedAmoListings[extension.guid],
-                    onToggle = { onToggleEnabled(extension) },
-                    onUninstall = { pendingUninstall = extension }
-                )
-            }
-        }
-        if (installableResults.isNotEmpty()) {
-            item {
-                Text(
-                    stringResource(R.string.extensions_recommended_from_amo),
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            items(installableResults, key = { "result:${it.guid}" }) { addon ->
-                AddonResultRow(
-                    addon = addon,
-                    installing = installingAddonGuid == addon.guid,
-                    installed = installed.any { it.guid == addon.guid },
-                    onInstall = { onInstall(addon) }
-                )
+        extensionPageSections(installableResults.isNotEmpty()).forEach { section ->
+            when (section) {
+                ExtensionsPageSection.SearchResults -> {
+                    item {
+                        Text(
+                            stringResource(R.string.extensions_search_results_title),
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    items(installableResults, key = { "result:${it.guid}" }) { addon ->
+                        AddonResultRow(
+                            addon = addon,
+                            installing = installingAddonGuid == addon.guid,
+                            installed = installed.any { it.guid == addon.guid },
+                            onInstall = { onInstall(addon) }
+                        )
+                    }
+                }
+
+                ExtensionsPageSection.Installed -> {
+                    item {
+                        Text(
+                            stringResource(R.string.extensions_installed_title),
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (installed.isEmpty()) {
+                        item {
+                            Text(
+                                stringResource(R.string.extensions_empty_installed),
+                                modifier = Modifier.padding(horizontal = 18.dp),
+                                color = Color(0xFF5F6368)
+                            )
+                        }
+                    } else {
+                        items(installed, key = { "installed:${it.guid}" }) { extension ->
+                            InstalledExtensionRow(
+                                extension = extension,
+                                amoListing = installedAmoListings[extension.guid],
+                                onToggle = { onToggleEnabled(extension) },
+                                onUninstall = { pendingUninstall = extension }
+                            )
+                        }
+                    }
+                }
             }
         }
         item {
